@@ -11,6 +11,14 @@ export interface Bounds {
   max: THREE.Vector3;
 }
 
+/**
+ * How long a creature is drawn in this tank. Giants (whales, whale sharks, squid)
+ * shrink to fit inside the glass, and grow back toward full size as the tank expands.
+ */
+export function fitLength(length: number, dims: Dims) {
+  return Math.min(length, Math.min(dims.w, dims.d) * 0.55, dims.h * 1.6);
+}
+
 /** Where a creature of the given length may swim in a diorama of size `dims`. */
 export function swimBounds(dims: Dims, length: number): Bounds {
   const { w, h, d } = dims;

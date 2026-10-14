@@ -5,7 +5,8 @@ import * as THREE from "three";
 import { tapVisitor } from "../state/visitorLogic";
 import type { ActiveVisitor } from "../state/uiStore";
 import { SPECIES_BY_ID } from "../data/creatures";
-import { fadeBox, swimBounds, type Dims } from "./layout";
+import { fadeBox, fitLength, swimBounds, type Dims } from "./layout";
+import { BIOMES } from "../data/biomes";
 import { getCreatureModel } from "./models/creatureModels";
 import { faceVelocity } from "./movement";
 import { visitorPos } from "../state/handoff";
@@ -20,28 +21,25 @@ export function Visitor({ visitor, dims }: { visitor: ActiveVisitor; dims: Dims 
   const giant = sp?.size === "XL";
   const material = useMemo(() => {
     const m = createSwimMaterial({ amp: model.swim.amp, freq: model.swim.freq, mode: model.swim.mode, rim: 1.2, rimColor: "#ffe9a8" });
-    setEdgeFade(m, fadeBox(visitor.biome, dims), giant ? 1.6 : 0.6);
+    setEdgeFade(m, fadeBox(visitor.biome, dims), giant ? 0.8 : 0.6);
     return m;
   }, [model, visitor.biome, giant, dims]);
   useEffect(() => () => material.dispose(), [material]);
   const group = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
 
-  // A gentle path across the habitat, randomly left→right or right→left.
+  // Drawn at a size that fits inside the glass (giants shrink to fit the tank).
+  const length = fitLength(model.length, dims);
+  // A gentle path across the habitat, randomly left→right or right→left, inside the glass.
   const path = useMemo(() => {
-    const b = swimBounds(dims, model.length);
-    // Giants pass straight through: they start and end beyond the walls, dissolving at the glass.
-    if (giant) {
-      const { w } = dims;
-      b.min.x = -(w / 2 + model.length * 0.55);
-      b.max.x = w / 2 + model.length * 0.55;
-    }
+    const b = swimBounds(dims, length);
     const dir = Math.random() < 0.5 ? 1 : -1;
     const y = THREE.MathUtils.lerp(b.min.y, b.max.y, 0.35 + Math.random() * 0.4);
     const z = THREE.MathUtils.lerp(b.min.z, b.max.z, 0.3 + Math.random() * 0.4);
     return { b, dir, y, z, wobble: Math.random() * 10 };
-  }, [model.length, giant, dims]);
-  const diveIn = sp?.trick === "dive";
+  }, [length, dims]);
+  // Sperm whales dive in from the sea surface; where there's a lid (the Deep Sea), they swim in like everyone else.
+  const diveIn = sp?.trick === "dive" && BIOMES[visitor.biome].sunlit;
 
   const state = useRef({ phase: 0, prev: new THREE.Vector3(), vel: new THREE.Vector3(), frozen: null as THREE.Vector3 | null });
 
@@ -64,7 +62,7 @@ export function Visitor({ visitor, dims }: { visitor: ActiveVisitor; dims: Dims 
       st.prev.copy(g.position);
       const top = dims.h;
       // A sperm whale "dives in": it sinks through the top before swimming across.
-      const diveY = THREE.MathUtils.lerp(top + model.length * 0.45, y, THREE.MathUtils.smoothstep(f, 0, 0.45));
+      const diveY = THREE.MathUtils.lerp(top + length * 0.45, y, THREE.MathUtils.smoothstep(f, 0, 0.45));
       g.position.set(
         THREE.MathUtils.lerp(x0, x1, f),
         diveIn ? diveY : THREE.MathUtils.clamp(y + Math.sin(f * 7 + wobble) * 0.25, b.min.y, b.max.y),
@@ -78,7 +76,7 @@ export function Visitor({ visitor, dims }: { visitor: ActiveVisitor; dims: Dims 
     u.uPhase.value = st.phase;
     u.uRim.value = 0.9 + Math.sin(s.clock.elapsedTime * 3) * 0.35;
     // Fade in and out at the ends of the path by scaling.
-    const k = visitor.state === "asking" || giant ? 1 : Math.min(1, f * 10, (1 - f) * 10);
+    const k = visitor.state === "asking" ? 1 : Math.min(1, f * 10, (1 - f) * 10);
     body.current?.scale.setScalar(Math.max(0.001, k));
     visitorPos.x = g.position.x;
     visitorPos.y = g.position.y;
@@ -90,7 +88,7 @@ export function Visitor({ visitor, dims }: { visitor: ActiveVisitor; dims: Dims 
     tapVisitor();
   };
 
-  const s = model.length;
+  const s = length;
   const top = dims.h;
   return (
     <group ref={group} position={[0, top / 2, 0]}>

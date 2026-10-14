@@ -8,7 +8,7 @@ import { useGame } from "../state/gameStore";
 import { spawnHints } from "../state/handoff";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
-import { fadeBox, swimBounds, terrainHeight, type Dims } from "./layout";
+import { fadeBox, fitLength, swimBounds, terrainHeight, type Dims } from "./layout";
 import { getCreatureModel } from "./models/creatureModels";
 import { createAgent, faceVelocity, resizeAgent, ROLL_SECONDS, startle, updateAgent } from "./movement";
 import { agents, creatureLengths, creaturePositions, habitatCtx, pairBook, tankCtx } from "./registry";
@@ -55,7 +55,10 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
     });
     return m;
   }, [model]);
-  useEffect(() => setEdgeFade(material, fadeBox(biome, dims), giant ? 1.6 : 0.6), [material, biome, dims, giant]);
+  // Drawn at a size that fits inside the glass (only giants ever need shrinking).
+  const length = fitLength(model.length, dims);
+  // A soft fade right at the glass, just in case anything brushes it.
+  useEffect(() => setEdgeFade(material, fadeBox(biome, dims), giant ? 0.8 : 0.6), [material, biome, dims, giant]);
   useEffect(() => () => material.dispose(), [material]);
 
   const group = useRef<THREE.Group>(null);
@@ -67,8 +70,8 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
     spawnHints.delete(uid);
     return createAgent({
       behavior: sp?.behavior === "school" ? "wander" : (sp?.behavior ?? "wander"),
-      bounds: swimBounds(dims, model.length),
-      length: model.length,
+      bounds: swimBounds(dims, length),
+      length,
       floorAt: (x, z) => terrainHeight(biome, x, z, dims),
       waterTop: dims.h,
       spawn: hint ? new THREE.Vector3(hint.x, hint.y, hint.z) : undefined,
@@ -82,14 +85,14 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
 
   useEffect(() => {
     creaturePositions.set(uid, (out) => out.copy(agent.pos));
-    creatureLengths.set(uid, model.length);
+    creatureLengths.set(uid, length);
     agents.set(uid, agent);
     return () => {
       creaturePositions.delete(uid);
       creatureLengths.delete(uid);
       agents.delete(uid);
     };
-  }, [uid, agent, model.length]);
+  }, [uid, agent, length]);
 
   // Sea otters pair up: 1st with 2nd, 3rd with 4th, … (in arrival order).
   const pairs = !!sp?.pairs;
@@ -109,8 +112,8 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
   useEffect(() => {
     if (sizedFor.current === dims) return;
     sizedFor.current = dims;
-    resizeAgent(agent, { bounds: swimBounds(dims, model.length), waterTop: dims.h, habitat: dims, floorAt: (x, z) => terrainHeight(biome, x, z, dims) });
-  }, [dims, agent, biome, model.length]);
+    resizeAgent(agent, { bounds: swimBounds(dims, length), waterTop: dims.h, habitat: dims, floorAt: (x, z) => terrainHeight(biome, x, z, dims), length });
+  }, [dims, agent, biome, length]);
   useEffect(() => {
     if (startleAt) startle(agent);
   }, [startleAt, agent]);
@@ -159,7 +162,7 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
     play("tap");
   };
 
-  const s = model.length;
+  const s = length;
   return (
     <group ref={group} position={agent.pos}>
       <group ref={body}>
@@ -168,7 +171,7 @@ export function Creature({ uid, speciesId, variantId, biome, castShadow, dims, s
           <GlbBody url={sp.modelUrl} length={s} />
         </Suspense>
       ) : (
-        <mesh geometry={model.geometry} material={material} scale={s} castShadow={castShadow && model.length > 0.45} />
+        <mesh geometry={model.geometry} material={material} scale={s} castShadow={castShadow && length > 0.45} />
       )}
       </group>
       {/* Generous invisible hit target so small fish are easy to tap. */}

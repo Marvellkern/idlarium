@@ -10,7 +10,7 @@ import { SPECIES_BY_ID } from "../data/creatures";
 import { ECONOMY } from "../state/economy";
 import { useUI, type Departing } from "../state/uiStore";
 import { prefersReducedMotion } from "../utils/motion";
-import { fadeBox, type Dims } from "./layout";
+import { fadeBox, fitLength, type Dims } from "./layout";
 import { getCreatureModel } from "./models/creatureModels";
 import { faceVelocity } from "./movement";
 import { createSwimMaterial, setEdgeFade } from "./swimShader";
@@ -63,7 +63,7 @@ function Leaver({ d, biome, dims, still }: { d: Departing; biome: BiomeId; dims:
     const dir = Math.abs(nx) > 0.15 || nz > -0.2 ? new THREE.Vector3(Math.sign(nx || (Math.random() - 0.5)), 0.12, 0) : new THREE.Vector3(0, 0.12, -1);
     dir.normalize();
     const distToWall = dir.x !== 0 ? dims.w / 2 - Math.abs(start.x) : dims.d / 2 + start.z;
-    const dist = Math.max(1, distToWall) + model.length * 1.2;
+    const dist = Math.max(1, distToWall) + fitLength(model.length, dims) * 1.2;
     // Start facing sideways to the exit, so the turn reads.
     const heading = new THREE.Vector3(-dir.z || 0.001, 0, dir.x).multiplyScalar(Math.random() < 0.5 ? 1 : -1);
     return { start, dir, dist, heading };
@@ -101,7 +101,7 @@ function Leaver({ d, biome, dims, still }: { d: Departing; biome: BiomeId; dims:
     g.visible = material.opacity > 0.01;
   });
 
-  const s = model.length;
+  const s = fitLength(model.length, dims);
   return (
     <group ref={group} position={plan.start}>
       {fish.map((p, i) => (

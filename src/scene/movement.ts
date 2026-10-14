@@ -1,8 +1,8 @@
 // Steering behaviors for individual creatures. Schools use boids in CreatureSchool.
 //
 //  wander / bottom / surface / hover: pick a target, steer with a limited turn rate, idle, repeat.
-//  cruise: slow wide loop. Giants (XL) loop beyond the diorama walls and fade out at the
-//          glass (see swimShader's edge fade), which sells their size without clipping.
+//  cruise: slow wide loop. Giants (XL) swim a big loop that stays just inside the glass
+//          (they're drawn at a size that fits the tank; see fitLength in layout.ts).
 //  resting: nocturnal species by day (and day species at night) tuck into hideouts or
 //           settle on the bottom and barely move.
 //  tricks: "jump" (dolphins leap out of the surface), "breach" (humpbacks launch half out
@@ -141,13 +141,16 @@ export function createAgent(opts: {
   return a;
 }
 
-/** A giant's loop scales with the habitat: it passes just beyond the side walls. */
+/**
+ * A giant's loop scales with the habitat and keeps the whole body inside the glass:
+ * half a body length (plus a little) from every wall, even mid-turn.
+ */
 function wideLoop(habitat: { w: number; h: number; d: number }, length: number) {
   return {
-    rx: habitat.w / 2 + length * 0.3,
-    rz: Math.max(1, habitat.d / 2 - length * 0.12),
+    rx: Math.max(0.5, habitat.w / 2 - length * 0.55 - 0.2),
+    rz: Math.max(0.5, habitat.d / 2 - length * 0.55 - 0.2),
     cy: habitat.h * 0.5,
-    ry: habitat.h * 0.18,
+    ry: habitat.h * 0.15,
   };
 }
 
@@ -157,8 +160,9 @@ function wideLoop(habitat: { w: number; h: number; d: number }, length: number) 
  */
 export function resizeAgent(
   a: Agent,
-  opts: { bounds: Bounds; waterTop: number; habitat: { w: number; h: number; d: number }; floorAt: (x: number, z: number) => number },
+  opts: { bounds: Bounds; waterTop: number; habitat: { w: number; h: number; d: number }; floorAt: (x: number, z: number) => number; length?: number },
 ) {
+  if (opts.length) a.length = opts.length;
   a.bounds = opts.bounds;
   a.waterTop = opts.waterTop;
   a.floorAt = opts.floorAt;
@@ -187,7 +191,7 @@ function clampToBounds(a: Agent) {
     a.pos.x = THREE.MathUtils.clamp(a.pos.x, min.x, max.x);
     a.pos.z = THREE.MathUtils.clamp(a.pos.z, min.z, max.z);
   }
-  if (a.trick === "dive") return; // dives leave through the top on purpose
+  if (a.trick === "dive") return; // dives follow their own loop (it stays in the water)
   const floor = a.floorAt(a.pos.x, a.pos.z) + a.length * 0.12 + 0.03;
   // waterTop can sit below the bounds when the tide is out.
   const top = a.behavior === "surface" ? a.waterTop - 0.02 : Math.min(max.y, a.waterTop - a.length * 0.3);
@@ -259,12 +263,12 @@ function heal(a: Agent, ctx: MoveContext) {
   pickTarget(a, ctx);
 }
 
-/** Point on the creature's loop: inside the bounds, or beyond the walls for giants. */
+/** Point on the creature's loop: inside the bounds (giants: their own wide loop, still inside). */
 function loopPoint(a: Agent, t: number, out: THREE.Vector3) {
   if (a.wide) {
     const { rx, rz, cy, ry } = a.wide;
-    // Sperm whales "dive in": the loop dips from above the top down toward the floor.
-    const y = a.trick === "dive" ? cy + Math.sin(t * 0.5) * cy * 1.25 : cy + Math.sin(t * 0.5 + 1) * ry;
+    // Sperm whales dive: the loop sweeps from near the top down toward the floor.
+    const y = a.trick === "dive" ? cy + Math.sin(t * 0.5) * Math.max(ry, cy - a.length * 0.25 - 0.3) : cy + Math.sin(t * 0.5 + 1) * ry;
     return out.set(Math.cos(t) * rx, y, Math.sin(t) * rz);
   }
   const { min, max } = a.bounds;
