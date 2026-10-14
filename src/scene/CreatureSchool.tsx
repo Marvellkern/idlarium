@@ -43,6 +43,7 @@ const up = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3();
 const look = new THREE.Matrix4();
 const scl = new THREE.Vector3();
+const tmpMax = new THREE.Vector3();
 
 export function CreatureSchool({ speciesId, variantId, uids, biome, castShadow, dims, startleAt }: Props) {
   const sp = SPECIES_BY_ID[speciesId];
@@ -121,7 +122,10 @@ export function CreatureSchool({ speciesId, variantId, uids, biome, castShadow, 
     if (!im) return;
     const dt = Math.min(dtRaw, 0.1);
     const s = sim.current;
-    const { min, max } = bounds;
+    const { min } = bounds;
+    // Tides can lower the water below the usual top.
+    const max = tmpMax.copy(bounds.max);
+    max.y = Math.max(min.y + 0.1, Math.min(max.y, dims.h * habitatCtx.waterLevel - model.length * 0.5));
     const n = s.pos.length;
 
     // Move the shared goal around like a wanderer (or to the food). Resting schools

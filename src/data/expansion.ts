@@ -56,4 +56,22 @@ export const TERRAIN_FEATURES: Record<string, TerrainFeature> = {
   "second-vent": { id: "second-vent", name: "A second vent", anchor: [0.84, -0.78] },
   "trench-glow": { id: "trench-glow", name: "A faintly glowing trench edge", anchor: [0, -0.92] },
   "bacteria-field": { id: "bacteria-field", name: "A field of glowing bacteria", anchor: [-0.82, -0.75] },
+  // Tidepool
+  "barnacle-ridge": { id: "barnacle-ridge", name: "A barnacle ridge", anchor: [-0.86, -0.78] },
+  "sea-stack": { id: "sea-stack", name: "A tall sea stack", anchor: [0.86, -0.8] },
+  "mussel-bed": { id: "mussel-bed", name: "A mussel bed", anchor: [-0.84, 0.8] },
+  "anemone-garden": { id: "anemone-garden", name: "An anemone garden", anchor: [0.84, 0.8] },
+  // Amazon River
+  "root-curtain": { id: "root-curtain", name: "A curtain of hanging roots", anchor: [-0.86, -0.7], placement: "surface" },
+  "sandy-bank": { id: "sandy-bank", name: "A sandy river bank", anchor: [0.8, 0.82] },
+  "flooded-grove": { id: "flooded-grove", name: "A flooded grove", anchor: [0.84, -0.78] },
+  "lily-lagoon": { id: "lily-lagoon", name: "A giant lily lagoon", anchor: [-0.8, 0.7], placement: "surface" },
+  // Kelp Forest (Lv4 reuses the reef's sand channel, Lv5 the ocean's extra light)
+  "kelp-thicket": { id: "kelp-thicket", name: "A kelp thicket", anchor: [-0.86, 0.6] },
+  "boulder-field": { id: "boulder-field", name: "A boulder field", anchor: [0.84, 0.78] },
+  // Polar Waters
+  "ice-floes": { id: "ice-floes", name: "More ice floes", anchor: [0.8, 0.7], placement: "surface" },
+  "ice-cave-edge": { id: "ice-cave-edge", name: "An ice cave", anchor: [-0.84, -0.78] },
+  "iceberg-keel": { id: "iceberg-keel", name: "The keel of an iceberg", anchor: [0.82, -0.75], placement: "surface" },
+  "aurora-crystals": { id: "aurora-crystals", name: "Aurora crystals", anchor: [-0.82, 0.78] },
 };

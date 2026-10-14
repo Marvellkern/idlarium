@@ -1,6 +1,6 @@
 # Idlarium
 
-A cozy low poly idle game. Build a collection of water creatures, from swamp frogs to blue whales, across four living diorama habitats you check on for a few minutes at a time. Nothing dies and there's no guilt: neglect only slows the pearls down a little.
+A cozy low poly idle game. Build a collection of water creatures, from swamp frogs to blue whales, across eight living diorama habitats, from a tiny tide pool to the polar ice, that you check on for a few minutes at a time. Nothing dies and there's no guilt: neglect only slows the pearls down a little.
 
 Built with Vite, React, TypeScript, React Three Fiber, drei, Zustand and Tailwind CSS. There's no backend: progress lives in `localStorage`.
 
@@ -15,9 +15,9 @@ npm run preview    # serve the production build locally
 
 Handy URL flags while testing (development builds only, `npm run dev`; production ignores them and doesn't even ship the code):
 
-- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, fill the habitat to capacity, fake the time of day, add pearls, spawn specific visitors or an old friend from the Sanctuary, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
+- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, unlock every habitat, fill the habitat to capacity, fake the time of day (night shows the Polar aurora), pin the Tidepool tide (low, mid, high), start or stop Amazon rain, add pearls, spawn specific visitors or an old friend from the Sanctuary, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
 - `?reducedmotion` pretends the device asked for reduced motion (to test the fades instead of the growth and swim-off animations).
-- `?gallery` shows every procedural creature model; `?gallery=ocean` (or `swamp`, `reef`, `deep`) shows one habitat bigger.
+- `?gallery` shows every procedural creature model; `?gallery=ocean` (or `swamp`, `tidepool`, `reef`, `amazon`, `kelp`, `deep`, `polar`) shows one habitat bigger.
 
 ## Deploy to Vercel
 
@@ -36,7 +36,9 @@ All balancing numbers live in data files, not in components:
 |---|---|
 | Species: cost, pearls/sec, size, rarity, how they're obtained, color variants, tricks, codex facts | `src/data/creatures.ts` |
 | Repeat-purchase growth (1.15×), space per size (S1/M2/L5/XL15), visitor rarity weights | `src/data/creatures.ts` |
-| Habitats: unlock cost, codex rewards, camera, fog, Lv1 decoration grid | `src/data/biomes.ts` |
+| Habitats: unlock order and cost, palette, size, codex rewards, camera, fog, lighting, light shafts, Lv1 decoration grid, fixed scenery (the Kelp Forest's starting kelp) | `src/data/biomes.ts` (`BIOME_ORDER` at the bottom is the unlock order) |
+| **Signature touches**: Tidepool tides (cycle length, low/high water, high-tide visitor bonus), Amazon rain (how often, how long, egg bonus), sea otters holding paws, Polar aurora and drifting ice | `src/data/signatures.ts` |
+| Which species exist in which habitat (the four newer habitats are in their own sections), the Polar "pole" of each species, egg-only species | `src/data/creatures.ts` |
 | **Expansion per habitat**: space at each of the 5 levels, Lv2 cost and cost growth, how much the diorama grows, the free terrain feature per level | `expansion` in `src/data/biomes.ts` |
 | **Expansion, shared**: size multipliers per level, new decoration slots per level, terrain feature names, animation length | `src/data/expansion.ts` |
 | First-full-expansion reward | `ECONOMY.expansion` in `src/state/economy.ts` |
@@ -44,37 +46,50 @@ All balancing numbers live in data files, not in components:
 | Sanctuary size and how often old friends come back | `ECONOMY.sanctuary` in `src/state/economy.ts` |
 | Decorations: cost, happiness bonus, visitor boosts, hideouts | `src/data/decorations.ts` |
 | Daily goals: the pool, targets, reward size (minutes of income) | `src/data/goals.ts` |
-| Starting pearls, offline rate and cap, happiness rules, visitor timing, egg rates and variant chance | `ECONOMY` in `src/state/economy.ts` |
-| Audio file paths (placeholders; the game synthesizes soft sounds without them) | `src/data/audio.ts` |
+| Starting pearls, offline rate and cap, happiness rules, visitor timing, egg rates, variant chance and the chance an egg is a habitat's egg-only species (`eggs.surpriseChance`) | `ECONOMY` in `src/state/economy.ts` |
+| Audio file paths (placeholders), and the recipe for each habitat's synthesized ambience (waves, gulls, river birds, sea lion barks, ice creaks, rain) | `src/data/audio.ts` |
 | Third-party asset credits | `src/data/credits.ts` |
 
 ### Current pacing
 
-Simulated for a casual player (about four 4-minute check-ins a day, feeding each time, buying an expansion as soon as it's affordable):
+Simulated for a casual player (about four 4-minute check-ins a day, feeding each time, buying an expansion as soon as it's affordable). Each new habitat sits about halfway, on a log scale, between its neighbors' unlock costs, so every step feels like a similar jump:
 
 | Milestone | When |
 |---|---|
-| Coral Reef (2K pearls) | Day 1, second check-in |
-| Freshwater Swamp fully expanded | Day 1–2 |
-| Coral Reef fully expanded | Day 2 |
-| Open Ocean (45M) | Around day 3 |
-| Open Ocean fully expanded | Around day 7–9 |
-| Deep Sea (3B) | Around day 6–8 |
-| Deep Sea fully expanded (the long-term goal) | Roughly 2–3 weeks |
+| Tidepool (600) and Coral Reef (2K) | Day 1, second check-in |
+| Amazon River (300K) | Day 1, third check-in |
+| Open Ocean (45M) | Around day 2 |
+| Kelp Forest (350M) | Around day 3 |
+| Deep Sea (3B) | Around day 5 |
+| Polar Waters (30B) | Around day 10 |
+| Deep Sea fully expanded | Around day 11 |
+| Polar Waters fully expanded (the long-term goal) | Around day 20 |
 
-Expansion costs follow `baseCost × costGrowth^(level − 2)`:
+More habitats mean more income overall, so the original four come a little sooner than before (Deep Sea used to take about a week). The four new habitats' creatures sit at the slow end of their neighbors' payback range to keep that in check. Polar Waters was planned at ~100B; the simulation put that more than three weeks after the Deep Sea, so it's 30B.
 
-| Habitat | Space Lv1 → Lv5 | Lv2 | Lv3 | Lv4 | Lv5 |
-|---|---|---|---|---|---|
-| Freshwater Swamp | 10 · 18 · 28 · 42 · 60 | 300 | 6K | 120K | 2.4M |
-| Coral Reef | 20 · 32 · 48 · 68 · 90 | 40K | 360K | 3.2M | 29M |
-| Open Ocean | 60 · 90 · 130 · 180 · 240 | 100M | 320M | 1B | 3.3B |
-| Deep Sea | 50 · 80 · 115 · 160 · 210 | 3B | 7.5B | 19B | 47B |
+Expansion costs follow `baseCost × costGrowth^(level − 2)`. New habitats use the same base-to-unlock ratio as their neighbors:
+
+| Habitat | Unlock | Space Lv1 → Lv5 | Lv2 | Lv3 | Lv4 | Lv5 |
+|---|---|---|---|---|---|---|
+| Freshwater Swamp | start | 10 · 18 · 28 · 42 · 60 | 300 | 6K | 120K | 2.4M |
+| Tidepool | 600 | 8 · 14 · 22 · 32 · 45 | 12K | 144K | 1.7M | 21M |
+| Coral Reef | 2K | 20 · 32 · 48 · 68 · 90 | 40K | 360K | 3.2M | 29M |
+| Amazon River | 300K | 25 · 40 · 60 · 85 · 115 | 2M | 11M | 58M | 315M |
+| Open Ocean | 45M | 60 · 90 · 130 · 180 · 240 | 100M | 320M | 1B | 3.3B |
+| Kelp Forest | 350M | 30 · 48 · 70 · 100 · 135 | 520M | 1.5B | 4.1B | 11B |
+| Deep Sea | 3B | 50 · 80 · 115 · 160 · 210 | 3B | 7.5B | 19B | 47B |
+| Polar Waters | 30B | 60 · 90 · 130 · 180 · 240 | 30B | 135B | 608B | 2.7T |
 
 Visitors and eggs (which the sim ignores) speed things up a bit. Playtest and tune from there.
 
 ## How the game works
 
+- **Habitats**, in unlock order: Freshwater Swamp, Tidepool, Coral Reef, Amazon River, Open Ocean, Kelp Forest, Deep Sea, Polar Waters. The Habitats panel lists them as compact rows, so all eight fit on a phone. Each newer habitat has a signature touch:
+  - **Tidepool**: the water rises and falls on a real 12.4-hour tide cycle (two high tides a day). High tide brings visitors a little sooner, and the giant Pacific octopus mostly turns up then. The top bar shows "High tide" or "Low tide".
+  - **Amazon River**: about once an hour while the game is open, a light rain shower falls for a few minutes: streaks, ripples, softer light and a rain sound, plus a slightly higher egg chance.
+  - **Kelp Forest**: tall kelp columns sway all the way to the surface (a few are always there), and sea otters float on their backs, pair up and sometimes hold paws.
+  - **Polar Waters**: by day ice floes drift across the surface; at night a green-violet aurora ripples above the ice and faintly tints the light. Every Polar codex entry says whether the animal is Arctic, Antarctic or found at both poles.
+- **Egg-only species** (nudibranch, redtail catfish, sunflower sea star, walrus) are never sold and never visit: any egg laid in their habitat has a small chance to be one of them. Once you have two, they lay their own eggs.
 - **Pearls** come from every creature: `pearlsPerSec × habitat happiness`.
 - **Happiness** runs from 0.5× to 1.5×. Decorations add to it (each kind counts once), feeding gives a small boost for 2 hours, and after 12 hours without food it drifts down slowly, never below 0.5×.
 - **Offline earnings** pay 50% of live income for up to 8 hours. Clock changes are clamped, so a wrong system time can't break a save.
@@ -89,7 +104,7 @@ Visitors and eggs (which the sim ignores) speed things up a bit. Playtest and tu
 - **Refunds**: species with a shop price give back 25% of their unscaled `baseCost`, so buying and releasing always loses pearls. Visitor-only species give back a few minutes of their habitat's income (2 for uncommon, 5 for rare, 10 for legendary), never less than 25% of that biome's cheapest shop creature.
 - **Make Room**: when a visitor or an egg doesn't fit, a picker lists the habitat's creatures (lowest rarity and income first) with how much space each frees, then "Release & Welcome" or "Release & Hatch". The visitor's timer stays paused while you choose. Eggs never hatch past capacity and never disappear: they wait with a "Needs X space" badge, and the away summary mentions them.
 - **Sanctuary**: released rares and legendaries are listed in a Sanctuary tab in the codex (up to 30, oldest dropped first). Now and then one comes back as a visitor marked with a heart; befriending it brings it home and takes it off the list.
-- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding), v2 → v3 (expansion) and v3 → v4 (the Sanctuary list for releases; nothing else changes). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
+- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding), v2 → v3 (expansion) v3 → v4 (the Sanctuary list for releases) and v4 → v5 (four new habitats, which simply start locked; nothing else changes). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
 - **Graphics**: High adds shadows, caustics, sun shafts and Deep Sea bloom. If frame rate drops, the game first lowers pixel density, then switches to Low once (with a message).
 
 ## Swapping in real 3D models
@@ -104,11 +119,14 @@ Drop files into `public/audio/` and set their paths in `src/data/audio.ts` (one 
 
 ```
 src/
-  data/      species, biomes, decorations, goals, expansion levels, pure habitat geometry
-             (size per level, terrain, stable decoration slots), audio paths, credits
-  state/     zustand store + save migrations, pure economy, visitors, eggs, expansion, release, game loop
+  data/      species, biomes, decorations, goals, expansion levels, signature touches,
+             pure habitat geometry (size per level, terrain, stable decoration slots),
+             audio paths and ambience recipes, credits
+  state/     zustand store + save migrations, pure economy, visitors, eggs, expansion, release,
+             weather (Amazon rain), game loop
   scene/     R3F diorama, lighting and day/night, creatures, schools (instanced boids),
-             movement, swim shader, decorations, eggs, visitors, deep-sea bloom
+             movement, swim shader, decorations, eggs, visitors, deep-sea bloom,
+             signature touches (tides, rain, aurora, ice floes)
   ui/        top bar, bottom nav, shop, decorate, codex, habitats, goals, settings,
              onboarding, credits, modals
   utils/     number formatting, time and day/night, audio
@@ -116,4 +134,4 @@ src/
 
 ## Build status
 
-All 13 steps of the original brief are done, plus the Tank Expansion and Release updates: four habitats (Freshwater Swamp, Coral Reef, Open Ocean, Deep Sea) that each grow through 5 size levels, with 38 species, 10 color variants, 33 decorations plus 16 free terrain features, visitors, eggs, releasing and a Sanctuary, codex, day/night, daily goals, onboarding, sounds and a performance pass. Polar Waters and the other stretch goals are next if wanted.
+All 13 steps of the original brief are done, plus the Tank Expansion, Release and New Habitats updates: eight habitats (Freshwater Swamp, Tidepool, Coral Reef, Amazon River, Open Ocean, Kelp Forest, Deep Sea, Polar Waters) that each grow through 5 size levels, with 79 species, 18 color variants, 65 decorations plus 30 free terrain features, tides, rain, swaying kelp and an aurora, visitors, eggs, releasing and a Sanctuary, codex, day/night, daily goals, onboarding, sounds and a performance pass.

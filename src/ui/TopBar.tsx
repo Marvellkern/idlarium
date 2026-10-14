@@ -3,7 +3,9 @@ import { capacityOf, spaceUsed } from "../state/economy";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
 import { fmt, fmtRate } from "../utils/format";
-import { useAnimatedNumber, useDaylight, useTotalIncome } from "./hooks";
+import { isHighTide, tidePhase } from "../data/signatures";
+import { useWeather } from "../state/weather";
+import { useAnimatedNumber, useDaylight, useNow, useTotalIncome } from "./hooks";
 import { GearIcon, PearlIcon, SpaceIcon } from "./icons";
 
 export function TopBar() {
@@ -53,6 +55,7 @@ export function TopBar() {
             {used}/{cap} · Lv{h?.sizeLevel ?? 1}
           </span>
         </button>
+        <SignatureStatus />
       </div>
 
       <button
@@ -66,4 +69,31 @@ export function TopBar() {
       </button>
     </header>
   );
+}
+
+/** Tidepool tide and Amazon rain, as a small line under the habitat name. */
+function SignatureStatus() {
+  const sig = useGame((s) => BIOMES[s.activeBiome].signature);
+  const rainUntil = useWeather((s) => s.rainUntil);
+  useUI((s) => s.clockTick);
+  const now = useNow(sig === "tides" ? 20_000 : 5_000);
+  if (sig === "tides") {
+    const high = isHighTide(now);
+    // Rising if the tide is higher a few minutes from now.
+    const rising = tidePhase(now + 10 * 60_000) > tidePhase(now);
+    return (
+      <div className="text-xs font-extrabold text-ink-soft" title="The tide follows a real 12.4-hour cycle. High tide brings visitors a little sooner.">
+        <span aria-hidden>≋ </span>
+        {high ? "High tide" : "Low tide"}
+        <span className="font-bold"> · {rising ? "rising" : "falling"}</span>
+      </div>
+    );
+  }
+  if (sig === "rain" && now < rainUntil)
+    return (
+      <div className="text-xs font-extrabold text-ink-soft" title="A light shower. Eggs are a little more likely while it rains.">
+        <span aria-hidden>☂ </span>Rain shower
+      </div>
+    );
+  return null;
 }

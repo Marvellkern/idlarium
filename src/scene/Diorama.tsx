@@ -85,16 +85,20 @@ export function Diorama({ biome, quality, level, fromLevel, preview }: Props) {
     const pos = g.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) pos.setY(i, terrainHeight(biome, pos.getX(i), pos.getZ(i), dims));
     const r = rng(biome.length * 13);
+    const tMax = b.terrainMax ?? 0.32;
     const painted = paint(g, (c) => {
       const k = r();
       if (biome === "swamp" && c.y > 0.22 && k < 0.5) return mix(p.floor, p.plant, 0.45);
+      // Rocky habitats: the higher bumps are rock.
+      if (p.rock && c.y > tMax * 0.55) return k < 0.3 ? mix(p.rock, "#000000", 0.12) : k < 0.45 ? mix(p.rock, "#ffffff", 0.1) : p.rock;
+      if (p.rock && c.y > tMax * 0.4 && k < 0.5) return mix(p.floor, p.rock, 0.5);
       if (k < 0.25) return mix(p.floor, "#000000", 0.1);
       if (k < 0.4) return mix(p.floor, "#ffffff", 0.08);
       return p.floor;
     });
     painted.computeVertexNormals();
     return painted;
-  }, [biome, w, d, dims, p.floor, p.plant]);
+  }, [biome, w, d, dims, p.floor, p.plant, p.rock, b.terrainMax]);
 
   // Unit-sized parts that get scaled to the (animated) size every frame.
   const soilGeo = useMemo(() => {
@@ -204,10 +208,12 @@ export function Diorama({ biome, quality, level, fromLevel, preview }: Props) {
       grow.uCur.value.set(1e4, 1e4);
     }
 
-    water.current?.scale.set(cur.w, cur.h, cur.d);
-    water.current?.position.set(0, cur.h / 2, 0);
+    // Tides lower the water (the glass stays the same height).
+    const wh = cur.h * habitatCtx.waterLevel;
+    water.current?.scale.set(cur.w, wh, cur.d);
+    water.current?.position.set(0, wh / 2, 0);
     surface.current?.scale.set(cur.w / dims.w, 1, cur.d / dims.d);
-    surface.current?.position.set(0, cur.h, 0);
+    surface.current?.position.set(0, wh, 0);
     soilMesh.current?.scale.set(cur.w, 1, cur.d);
     const frameH = floorless ? cur.h : cur.h + cur.soil;
     frame.current?.scale.set(cur.w, frameH, cur.d);
@@ -278,7 +284,7 @@ export function LightShafts({ dims, count = 5 }: { dims: Dims; count?: number })
   useEffect(() => () => (geo.dispose(), mat.dispose()), [geo, mat]);
   const refs = useMemo(() => shafts.map(() => ({ current: null as THREE.Mesh | null })), [shafts]);
   useFrame(({ camera }) => {
-    mat.uniforms.uOpacity.value = 0.12 * habitatCtx.daylight;
+    mat.uniforms.uOpacity.value = 0.12 * habitatCtx.daylight * (1 - habitatCtx.rain * 0.7);
     refs.forEach((r, i) => {
       const m = r.current;
       if (!m) return;

@@ -1,12 +1,16 @@
 // Biome configs: palettes, diorama dimensions, camera, capacity and unlock costs.
 // All balancing numbers for habitats live here. Tweak freely.
 //
-// Pacing target (casual player, ~4 short check-ins a day): Coral Reef on day 1,
-// Open Ocean around day 2–3, Deep Sea around day 7. Each habitat physically expands
-// through 5 size levels (see `expansion` below and data/expansion.ts); the last
-// Deep Sea expansion is a long-term goal.
+// Unlock order (BIOME_ORDER at the bottom) runs swamp → tidepool → reef → amazon →
+// ocean → kelp → deep → polar. Each new habitat sits about halfway (on a log scale)
+// between its neighbors' unlock costs. Each habitat physically expands through 5
+// size levels (see `expansion` below and data/expansion.ts). Signature touches
+// (tides, rain, kelp, aurora) are tuned in data/signatures.ts.
 
-export type BiomeId = "swamp" | "reef" | "ocean" | "deep" | "polar";
+export type BiomeId = "swamp" | "tidepool" | "reef" | "amazon" | "ocean" | "kelp" | "deep" | "polar";
+
+/** Kind of water, shown as a small label in the habitat switcher. */
+export type BiomeGroup = "Freshwater" | "Coast" | "Open sea" | "Polar";
 
 export interface BiomePalette {
   water: string; // main water tint
@@ -18,6 +22,8 @@ export interface BiomePalette {
   glow: string;
   bgTop: string; // page backdrop gradient behind the floating diorama
   bgBottom: string;
+  /** Optional rock color: the higher terrain bumps are painted with it (tide pools, kelp reefs, ice). */
+  rock?: string;
 }
 
 export interface BiomeConfig {
@@ -59,6 +65,17 @@ export interface BiomeConfig {
   sunlit: boolean;
   /** Said once when night falls (or on opening at night). */
   nightLine: string;
+  group: BiomeGroup;
+  /** Sun shafts through the water (high quality only). 0 = none. */
+  lightShafts: number;
+  /** Daytime light overrides (defaults suit a clear, sunlit habitat). */
+  lighting?: { sun?: string; sunI?: number; hemiI?: number; ambient?: number };
+  /** Height of the terrain bumps (default 0.32). */
+  terrainMax?: number;
+  /** The habitat's special touch, tuned in data/signatures.ts. */
+  signature?: "tides" | "rain" | "kelp" | "aurora";
+  /** Fixed scenery that's always there (not decorations): deco model id, spot as a fraction of the Lv1 half-size. */
+  scenery?: { decoId: string; x: number; z: number; scale: number; rotY?: number }[];
 }
 
 export const BIOMES: Record<BiomeId, BiomeConfig> = {
@@ -95,6 +112,8 @@ export const BIOMES: Record<BiomeId, BiomeConfig> = {
     emptyPrompt: "Your swamp is quiet… buy your first guppy.",
     sunlit: true,
     nightLine: "The swamp is sleepy tonight.",
+    group: "Freshwater",
+    lightShafts: 0,
   },
   reef: {
     id: "reef",
@@ -129,6 +148,8 @@ export const BIOMES: Record<BiomeId, BiomeConfig> = {
     emptyPrompt: "The reef is waiting for its first clownfish.",
     sunlit: true,
     nightLine: "The reef is settling in for the night. Night owls are out.",
+    group: "Coast",
+    lightShafts: 5,
   },
   ocean: {
     id: "ocean",
@@ -164,6 +185,8 @@ export const BIOMES: Record<BiomeId, BiomeConfig> = {
     emptyPrompt: "So much open water. Who will swim here first?",
     sunlit: true,
     nightLine: "Moonlight on the open ocean.",
+    group: "Open sea",
+    lightShafts: 5,
   },
   deep: {
     id: "deep",
@@ -198,42 +221,182 @@ export const BIOMES: Record<BiomeId, BiomeConfig> = {
     emptyPrompt: "Nothing glows down here yet.",
     sunlit: false,
     nightLine: "",
+    group: "Open sea",
+    lightShafts: 0,
+  },
+  tidepool: {
+    id: "tidepool",
+    name: "Tidepool",
+    tagline: "Tiny rock pools, real tides",
+    playable: true,
+    // About 0.3 × the Coral Reef: cheap early variety.
+    unlockCost: 600,
+    palette: {
+      water: "#7fd1c7",
+      deep: "#3a8f8a",
+      floor: "#e8d9b0",
+      soil: "#a8987a",
+      plant: "#6fae6a",
+      accent: "#ff9f68",
+      glow: "#fff6d8",
+      bgTop: "#e6f6f2",
+      bgBottom: "#78bdb4",
+      rock: "#6e6a6a",
+    },
+    dims: { w: 5.2, h: 2.2, d: 3.8, soil: 0.8 },
+    camera: { distance: 8.5, min: 3, max: 13, fov: 42 },
+    fog: { near: 6, far: 21 },
+    caustics: true,
+    expansion: {
+      space: [8, 14, 22, 32, 45],
+      // Same base-to-unlock ratio as the Coral Reef (×20).
+      baseCost: 12_000,
+      costGrowth: 12,
+      growth: 1,
+      features: ["barnacle-ridge", "sea-stack", "mussel-bed", "anemone-garden"],
+    },
+    decoSlots: { cols: 4, rows: 2, surface: 0 },
+    codexRewards: [500, 1500, 4500, 12000],
+    emptyPrompt: "The rock pool is still. Buy your first hermit crab.",
+    sunlit: true,
+    nightLine: "The tide pool glitters under the moon.",
+    group: "Coast",
+    lightShafts: 0,
+    terrainMax: 0.5,
+    signature: "tides",
+  },
+  amazon: {
+    id: "amazon",
+    name: "Amazon River",
+    tagline: "Tea-brown water, flooded forest",
+    playable: true,
+    // √(Coral Reef × Open Ocean): halfway on a log scale.
+    unlockCost: 300_000,
+    palette: {
+      water: "#8a6a3c",
+      deep: "#4a3820",
+      floor: "#6b5434",
+      soil: "#4a3a26",
+      plant: "#5f9e4a",
+      accent: "#ff5a4f",
+      glow: "#e8d27a",
+      bgTop: "#ddd5ad",
+      bgBottom: "#6e5c38",
+      rock: "#5b4630",
+    },
+    dims: { w: 10, h: 5, d: 6.5, soil: 1.1 },
+    camera: { distance: 15, min: 4.5, max: 22, fov: 42 },
+    fog: { near: 9, far: 30 },
+    caustics: true,
+    expansion: {
+      space: [25, 40, 60, 85, 115],
+      // Base-to-unlock ratio halfway (log) between the Reef's and the Open Ocean's.
+      baseCost: 2_000_000,
+      costGrowth: 5.4,
+      growth: 1,
+      features: ["root-curtain", "sandy-bank", "flooded-grove", "lily-lagoon"],
+    },
+    decoSlots: { cols: 4, rows: 2, surface: 3 },
+    codexRewards: [100_000, 300_000, 900_000, 2_500_000],
+    emptyPrompt: "The river flows quietly. Who'll swim in first?",
+    sunlit: true,
+    nightLine: "Frogs and insects sing over the dark river.",
+    group: "Freshwater",
+    lightShafts: 6,
+    lighting: { sun: "#ffe7b0", sunI: 1.6, hemiI: 1.0, ambient: 0.24 },
+    signature: "rain",
+  },
+  kelp: {
+    id: "kelp",
+    name: "Kelp Forest",
+    tagline: "Tall, swaying, full of sunbeams",
+    playable: true,
+    // Halfway (log) between the Open Ocean and the Deep Sea.
+    unlockCost: 350_000_000,
+    palette: {
+      water: "#2f8a8a",
+      deep: "#164e57",
+      floor: "#c8b88a",
+      soil: "#7a6c52",
+      plant: "#8a7a2f",
+      accent: "#ff7a29",
+      glow: "#e8f4d0",
+      bgTop: "#d2ece8",
+      bgBottom: "#2c7479",
+      rock: "#5a6470",
+    },
+    dims: { w: 11, h: 8, d: 7.5, soil: 1 },
+    camera: { distance: 20, min: 6, max: 30, fov: 42 },
+    fog: { near: 13, far: 42 },
+    caustics: true,
+    expansion: {
+      space: [30, 48, 70, 100, 135],
+      // Base-to-unlock ratio halfway (log) between the Open Ocean's and the Deep Sea's.
+      baseCost: 520_000_000,
+      costGrowth: 2.8,
+      growth: 0.85,
+      features: ["kelp-thicket", "boulder-field", "sand-channel", "more-light"],
+    },
+    decoSlots: { cols: 4, rows: 2, surface: 0 },
+    codexRewards: [20_000_000, 50_000_000, 150_000_000, 400_000_000],
+    emptyPrompt: "Sunbeams fall through empty kelp. Who'll live here?",
+    sunlit: true,
+    nightLine: "The kelp sways in the dark. Otters are asleep at the top.",
+    group: "Coast",
+    lightShafts: 8,
+    signature: "kelp",
+    // A few giant kelp columns are always there, rooted along the back.
+    scenery: [
+      { decoId: "giant-kelp", x: -0.78, z: -0.7, scale: 1.1 },
+      { decoId: "giant-kelp", x: -0.25, z: -0.86, scale: 0.95, rotY: 1.2 },
+      { decoId: "giant-kelp", x: 0.38, z: -0.78, scale: 1.05, rotY: 2.4 },
+      { decoId: "giant-kelp", x: 0.86, z: -0.5, scale: 0.9, rotY: 0.6 },
+    ],
   },
   polar: {
     id: "polar",
     name: "Polar Waters",
-    tagline: "Icy, pale, quiet",
-    playable: false,
-    unlockCost: 5000000,
+    tagline: "Pale, quiet and huge",
+    playable: true,
+    // Lowered from ~100B in the balance pass: about a week after the Deep Sea.
+    unlockCost: 30_000_000_000,
     palette: {
       water: "#9cc9e0",
-      deep: "#4f84a3",
-      floor: "#dce9f0",
-      soil: "#8aa6b5",
-      plant: "#6fa0b0",
-      accent: "#ffffff",
-      glow: "#e6f6ff",
+      deep: "#2e5a7a",
+      floor: "#e4eef5",
+      soil: "#6f8fa8",
+      plant: "#7fa8b8",
+      accent: "#ffd36b",
+      glow: "#eef7ff",
       bgTop: "#eef6fb",
-      bgBottom: "#9ab9cc",
+      bgBottom: "#7fa4bf",
+      rock: "#8fa9bd",
     },
     dims: { w: 14, h: 8, d: 10, soil: 1 },
-    camera: { distance: 24, min: 16, max: 34, fov: 42 },
+    camera: { distance: 24, min: 7, max: 34, fov: 42 },
     fog: { near: 16, far: 50 },
     caustics: false,
     expansion: {
       space: [60, 90, 130, 180, 240],
-      baseCost: 100_000,
-      costGrowth: 3,
+      // Same base-to-unlock ratio as the Deep Sea (×1).
+      baseCost: 30_000_000_000,
+      // Steeper than the Deep Sea's so full size stays a long-term goal (~10 days after unlocking).
+      costGrowth: 4.5,
       growth: 0.7,
-      features: ["more-light", "kelp-edge", "deeper-blue", "far-seamount"],
+      features: ["ice-floes", "ice-cave-edge", "iceberg-keel", "aurora-crystals"],
     },
     decoSlots: { cols: 3, rows: 2, surface: 2 },
-    codexRewards: [500000, 1000000, 3000000, 8000000],
+    codexRewards: [3_000_000_000, 8_000_000_000, 20_000_000_000, 50_000_000_000],
     emptyPrompt: "The ice creaks softly. No one here yet.",
     sunlit: true,
-    nightLine: "The polar night is long and quiet.",
+    nightLine: "The aurora is out over the ice.",
+    group: "Polar",
+    lightShafts: 0,
+    lighting: { sun: "#f4fbff", sunI: 1.9, hemiI: 1.15, ambient: 0.3 },
+    terrainMax: 0.38,
+    signature: "aurora",
   },
 };
 
-/** Order shown in the biome switcher. */
-export const BIOME_ORDER: BiomeId[] = ["swamp", "reef", "ocean", "deep"];
+/** Unlock order, also the order shown in the habitat switcher and codex. */
+export const BIOME_ORDER: BiomeId[] = ["swamp", "tidepool", "reef", "amazon", "ocean", "kelp", "deep", "polar"];

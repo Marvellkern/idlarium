@@ -6,12 +6,17 @@
 //  resting: nocturnal species by day (and day species at night) tuck into hideouts or
 //           settle on the bottom and barely move.
 //  tricks: "jump" (dolphins leap out of the surface), "breach" (humpbacks launch half out
-//          of the water), "dive" (sperm whales sink in from above and rise back out).
+//          of the water), "dive" (sperm whales sink in from above and rise back out),
+//          "breathe" (arapaima nose up through the surface to gulp air), "roll" (otters
+//          roll over at the surface; the roll itself is drawn by Creature.tsx).
 import * as THREE from "three";
 import type { Behavior } from "../data/creatures";
 import type { Bounds } from "./layout";
 
-export type Trick = "jump" | "breach" | "dive";
+export type Trick = "jump" | "breach" | "dive" | "breathe" | "roll";
+
+/** How long an otter roll takes (s). */
+export const ROLL_SECONDS = 1.4;
 
 export interface Splash {
   pos: THREE.Vector3;
@@ -44,6 +49,10 @@ export interface Agent {
   /** Giant loop that passes beyond the diorama walls. */
   wide: { rx: number; rz: number; cy: number; ry: number } | null;
   trick?: Trick;
+  /** Climbs onto perches (lily pads, ice floes) to rest. */
+  perches?: boolean;
+  /** Seconds left in an otter roll (0 = not rolling). */
+  rollT: number;
   /** Seconds until the next trick. */
   trickIn: number;
   /** Currently mid-air / mid-breach. */
@@ -73,7 +82,7 @@ function randIn(a: Agent, min: number, max: number) {
 }
 
 /** Seconds between tricks: dolphins leap now and then, humpbacks breach only occasionally. */
-const TRICK_GAP: Record<Trick, [number, number]> = { jump: [25, 60], breach: [150, 360], dive: [0, 0] };
+const TRICK_GAP: Record<Trick, [number, number]> = { jump: [25, 60], breach: [150, 360], dive: [0, 0], breathe: [40, 90], roll: [12, 30] };
 
 export function createAgent(opts: {
   behavior: Behavior;
@@ -87,6 +96,7 @@ export function createAgent(opts: {
   habitat?: { w: number; h: number; d: number };
   giant?: boolean;
   trick?: Trick;
+  perches?: boolean;
 }): Agent {
   const rand = opts.rand ?? Math.random;
   const { min, max } = opts.bounds;
@@ -119,6 +129,8 @@ export function createAgent(opts: {
     hideIdx: Math.floor(rand() * 100),
     wide,
     trick: opts.trick,
+    perches: opts.perches,
+    rollT: 0,
     trickIn: opts.trick ? (TRICK_GAP[opts.trick][0] + rand() * (TRICK_GAP[opts.trick][1] - TRICK_GAP[opts.trick][0])) * 0.5 : 0,
     airborne: false,
     wasAbove: false,
@@ -177,7 +189,8 @@ function clampToBounds(a: Agent) {
   }
   if (a.trick === "dive") return; // dives leave through the top on purpose
   const floor = a.floorAt(a.pos.x, a.pos.z) + a.length * 0.12 + 0.03;
-  const top = a.behavior === "surface" ? a.waterTop - 0.02 : max.y;
+  // waterTop can sit below the bounds when the tide is out.
+  const top = a.behavior === "surface" ? a.waterTop - 0.02 : Math.min(max.y, a.waterTop - a.length * 0.3);
   a.pos.y = THREE.MathUtils.clamp(a.pos.y, Math.min(floor, top), top);
 }
 
@@ -209,7 +222,7 @@ function pickTarget(a: Agent, ctx: MoveContext) {
       a.target.set(x, a.floorAt(x, z) + a.length * 0.12 + 0.05 + a.rand() * 0.12, z);
       break;
     case "surface":
-      if (ctx.pads.length && a.rand() < 0.45) {
+      if (a.perches && ctx.pads.length && a.rand() < 0.45) {
         const pad = ctx.pads[Math.floor(a.rand() * ctx.pads.length)];
         a.target.copy(pad);
         a.goingToPad = pad;
@@ -264,7 +277,19 @@ function loopPoint(a: Agent, t: number, out: THREE.Vector3) {
 
 function startTrick(a: Agent) {
   if (!a.trick || a.trick === "dive") return;
-  if (a.trick === "jump") {
+  if (a.trick === "roll") {
+    if (a.pos.y < a.waterTop - 0.6) return;
+    a.rollT = ROLL_SECONDS;
+    return;
+  }
+  if (a.trick === "breathe") {
+    // Nose up through the surface for a gulp of air, then back down.
+    if (a.pos.y < a.waterTop - 1.6) return;
+    const rise = a.waterTop + a.length * 0.12 - a.pos.y;
+    a.vel.y = Math.sqrt(2 * GRAVITY * Math.max(0.15, rise));
+    a.vel.x *= 0.5;
+    a.vel.z *= 0.5;
+  } else if (a.trick === "jump") {
     if (a.pos.y < a.waterTop - 1.2) return; // only leap from near the surface
     const rise = a.waterTop + a.length * 0.6 - a.pos.y;
     a.vel.y = Math.sqrt(2 * GRAVITY * Math.max(0.2, rise));
@@ -326,11 +351,13 @@ export function updateAgent(a: Agent, ctx: MoveContext): number {
     return 0;
   }
 
+  if (a.rollT > 0) a.rollT = Math.max(0, a.rollT - dt);
   if (a.trick && a.trick !== "dive" && !a.resting) {
     a.trickIn -= dt;
     if (a.trickIn <= 0) {
       startTrick(a);
-      if (!a.airborne) a.trickIn = 3; // not near the surface yet; try again soon
+      if (a.rollT > 0) a.trickIn = randIn(a, ...TRICK_GAP.roll);
+      else if (!a.airborne) a.trickIn = 3; // not near the surface yet; try again soon
       else return a.vel.length();
     }
   }

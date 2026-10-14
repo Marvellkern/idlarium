@@ -8,6 +8,8 @@ export interface DecoModel {
   /** Plant sway amplitude (0 = static). */
   sway: number;
   glow?: { geometry: THREE.BufferGeometry; color: string };
+  /** The glow is daylight (sunbeams), shown softly by day instead of at night. */
+  dayGlow?: boolean;
   /** Slow rotation in rad/s (swirling bait balls, drifting swarms). */
   spin?: number;
   /** A small point light (hydrothermal vents light up the dark). y is in local units. */
@@ -556,6 +558,494 @@ function whaleFall(): DecoModel {
   return { geometry: merge(parts), sway: 0 };
 }
 
+// ───────────── Tidepool ─────────────
+
+const WET_ROCK = (_p: THREE.Vector3, f: number) => (speckle(f, 20) ? "#5a5656" : speckle(f, 12, 3) ? "#8a8484" : "#6e6a6a");
+
+/** Little white volcano cones scattered over a surface. */
+function barnacles(parts: THREE.BufferGeometry[], n: number, seed: number, place: (r: () => number) => V3, size = 0.045) {
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const [x, y, z] = place(r);
+    const s = size * (0.7 + r() * 0.6);
+    parts.push(paint(tf(cyl(s * 0.45, s, s * 0.9, 5), { p: [x, y + s * 0.4, z] }), (p) => (p.y > y + s * 0.8 ? "#9a9488" : "#efe9dc")));
+  }
+}
+
+function barnacleRock(): DecoModel {
+  const parts = [paint(jitter(tf(ico(0.5, 1), { s: [1, 0.6, 0.8], p: [0, 0.22, 0] }), 0.06, 41), WET_ROCK)];
+  barnacles(parts, 22, 42, (r) => {
+    const a = r() * Math.PI * 2;
+    const k = 0.3 + r() * 0.15;
+    return [Math.cos(a) * k, 0.38 + r() * 0.12, Math.sin(a) * k * 0.8];
+  });
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function musselCluster(): DecoModel {
+  const parts = [paint(jitter(tf(ico(0.4, 1), { s: [1.1, 0.4, 0.9], p: [0, 0.1, 0] }), 0.05, 43), WET_ROCK)];
+  const r = rng(44);
+  for (let i = 0; i < 16; i++) {
+    const a = r() * Math.PI * 2;
+    const k = r() * 0.32;
+    const g = tf(sphere(0.5, 6, 4), { s: [0.07, 0.05, 0.16], r: [r() * 0.8 - 0.4, a, 0.3], p: [Math.cos(a) * k, 0.2 + r() * 0.08, Math.sin(a) * k] });
+    parts.push(paint(g, (p) => (p.y > 0.25 ? "#3a4a6a" : "#1e2432")));
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function greenAnemone(): DecoModel {
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.35, 1), { s: [1, 0.35, 1], p: [0, 0.06, 0] }), 0.04, 45), WET_ROCK)];
+  const r = rng(46);
+  for (const [cx, cz, s] of [[0, 0, 1], [0.32, 0.2, 0.7]] as [number, number, number][]) {
+    parts.push(paint(tf(cyl(0.16 * s, 0.2 * s, 0.22 * s, 9), { p: [cx, 0.17 * s, cz] }), "#4f8a5a"));
+    parts.push(paint(tf(cyl(0.18 * s, 0.17 * s, 0.03, 12), { p: [cx, 0.29 * s, cz] }), "#a8e0a0"));
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + r() * 0.2;
+      const k = (0.08 + r() * 0.09) * s;
+      parts.push(paint(tf(cone(0.022 * s, 0.11 * s, 3), { r: [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5], p: [cx + Math.cos(a) * k, 0.33 * s, cz + Math.sin(a) * k] }), mix("#7ad87a", "#c8f0a8", r())));
+    }
+  }
+  return { geometry: merge(parts), sway: 0.006 };
+}
+
+function seaLettuce(): DecoModel {
+  const r = rng(47);
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.22, 0), { s: [1, 0.5, 1], p: [0, 0.05, 0] }), 0.03, 48), WET_ROCK)];
+  for (let i = 0; i < 9; i++) {
+    const a = r() * Math.PI * 2;
+    const leaf = sphere(0.5, 6, 4);
+    leaf.scale(0.26 + r() * 0.12, 0.42 + r() * 0.2, 0.03);
+    leaf.translate(0, 0.2, 0);
+    leaf.rotateX((r() - 0.5) * 0.8);
+    leaf.rotateY(a);
+    leaf.translate(Math.cos(a) * 0.08, 0.04, Math.sin(a) * 0.08);
+    parts.push(paint(leaf, mix("#5fbf4a", "#a8e070", r())));
+  }
+  return { geometry: merge(parts), sway: 0.03 };
+}
+
+function corallineAlgae(): DecoModel {
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.42, 1), { s: [1.1, 0.35, 0.9], p: [0, 0.08, 0] }), 0.05, 49), (_p, f) => (speckle(f, 30) ? "#e8a0b8" : "#c87a98"))];
+  const r = rng(50);
+  for (let i = 0; i < 14; i++) {
+    const x = (r() - 0.5) * 0.6;
+    const z = (r() - 0.5) * 0.5;
+    const h = 0.12 + r() * 0.12;
+    parts.push(paint(tube([[x, 0.15, z], [x + (r() - 0.5) * 0.06, 0.15 + h * 0.5, z], [x + (r() - 0.5) * 0.1, 0.15 + h, z + (r() - 0.5) * 0.06]], 0.016, 3), mix("#e890b0", "#ffc8d8", r())));
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function tidePuddle(): DecoModel {
+  const parts: THREE.BufferGeometry[] = [];
+  const r = rng(51);
+  // A ring of rocks around a shallow, sandy hollow with a few shells.
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + r() * 0.3;
+    const k = 0.42 + r() * 0.06;
+    parts.push(paint(jitter(tf(ico(0.13 + r() * 0.07, 0), { s: [1, 0.7, 1], p: [Math.cos(a) * k, 0.07, Math.sin(a) * k] }), 0.02, i), WET_ROCK));
+  }
+  parts.push(paint(tf(cyl(0.38, 0.38, 0.02, 14), { p: [0, 0.015, 0] }), "#d8c89a"));
+  parts.push(paint(tf(cyl(0.34, 0.34, 0.012, 14), { p: [0, 0.035, 0] }), "#9ad8d0"));
+  for (let i = 0; i < 4; i++) parts.push(paint(tf(cone(0.03, 0.05, 5), { p: [(r() - 0.5) * 0.4, 0.04, (r() - 0.5) * 0.4] }), mix("#f2d0a0", "#ff9f68", r())));
+  barnacles(parts, 8, 52, (rr) => {
+    const a = rr() * Math.PI * 2;
+    return [Math.cos(a) * 0.45, 0.13, Math.sin(a) * 0.45];
+  }, 0.03);
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function driftwood(): DecoModel {
+  const wood = (_p: THREE.Vector3, f: number) => (speckle(f, 22) ? "#a8a090" : "#cfc6b4");
+  const parts = [
+    paint(tube([[-0.6, 0.08, -0.1], [-0.2, 0.12, 0.02], [0.2, 0.1, -0.04], [0.6, 0.06, 0.08]], (t) => 0.09 * (1 - t * 0.5), 6), wood),
+    paint(tube([[-0.05, 0.12, 0.0], [0.05, 0.26, 0.18], [0.0, 0.36, 0.32]], (t) => 0.04 * (1 - t * 0.7), 4), wood),
+    paint(tube([[0.3, 0.1, -0.02], [0.42, 0.2, -0.22], [0.5, 0.24, -0.3]], (t) => 0.03 * (1 - t * 0.7), 4), wood),
+  ];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function seaArch(): DecoModel {
+  const parts = [
+    paint(jitter(tf(cyl(0.2, 0.3, 0.85, 7, 2), { p: [-0.5, 0.42, 0] }), 0.05, 53), WET_ROCK),
+    paint(jitter(tf(cyl(0.2, 0.3, 0.85, 7, 2), { p: [0.5, 0.42, 0] }), 0.05, 54), WET_ROCK),
+    paint(tube([[-0.52, 0.75, 0], [-0.28, 1.08, 0], [0.28, 1.08, 0], [0.52, 0.75, 0]], 0.18, 6), WET_ROCK),
+  ];
+  barnacles(parts, 18, 55, (r) => [(r() - 0.5) * 1.2, r() * 0.35, (r() < 0.5 ? -1 : 1) * 0.22]);
+  parts.push(paint(tf(sphere(0.5, 6, 3), { s: [0.5, 0.05, 0.3], p: [0, 0.02, 0] }), "#c87a98"));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+// ───────────── Amazon River ─────────────
+
+const BARK = (_p: THREE.Vector3, f: number) => (speckle(f, 25) ? "#4a3620" : speckle(f, 15, 2) ? "#6e5232" : "#5b4630");
+
+function riverStones(): DecoModel {
+  const r = rng(101);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const s = 0.12 + r() * 0.12;
+    parts.push(paint(tf(sphere(s, 7, 5), { s: [1.2, 0.55, 1], r: [0, r() * 3, 0], p: [(r() - 0.5) * 0.8, s * 0.4, (r() - 0.5) * 0.7] }), mix("#7a6a52", "#a89a80", r())));
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function sunkenBranch(): DecoModel {
+  const parts = [
+    paint(tube([[-0.55, 0.06, -0.2], [-0.1, 0.12, 0], [0.3, 0.08, 0.15], [0.55, 0.05, 0.3]], (t) => 0.06 * (1 - t * 0.5), 5), BARK),
+    paint(tube([[-0.1, 0.12, 0], [-0.15, 0.3, 0.2], [-0.3, 0.45, 0.3]], (t) => 0.03 * (1 - t * 0.6), 4), BARK),
+    paint(tube([[0.2, 0.1, 0.1], [0.3, 0.32, -0.1], [0.25, 0.5, -0.25]], (t) => 0.025 * (1 - t * 0.6), 4), BARK),
+    paint(tube([[0.35, 0.08, 0.18], [0.5, 0.22, 0.0], [0.6, 0.3, -0.05]], (t) => 0.02 * (1 - t * 0.6), 4), BARK),
+  ];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function leafShape(len: number, w: number) {
+  const s = new THREE.Shape([[0, len / 2], [w / 2, 0], [0, -len / 2], [-w / 2, 0]].map(([x, z]) => new THREE.Vector2(x, z)));
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: false });
+  g.rotateX(Math.PI / 2);
+  return g;
+}
+
+function floatingLeaves(): DecoModel {
+  const r = rng(102);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) {
+    const g = leafShape(0.2 + r() * 0.12, 0.1 + r() * 0.05);
+    g.rotateY(r() * Math.PI * 2);
+    g.translate((r() - 0.5) * 0.9, 0.02, (r() - 0.5) * 0.9);
+    parts.push(paint(g, mix(["#8a6a2a", "#a8803a", "#6e8a3a", "#c89a4a"][i % 4], "#000000", r() * 0.15)));
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function waterLettuce(ctx: Ctx): DecoModel {
+  const r = rng(103);
+  const parts: THREE.BufferGeometry[] = [];
+  for (const [cx, cz, s] of [[0, 0, 1], [0.38, 0.22, 0.75], [-0.32, 0.3, 0.65]] as [number, number, number][]) {
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2;
+      const leaf = sphere(0.5, 5, 4);
+      leaf.scale(0.12 * s, 0.05 * s, 0.2 * s);
+      leaf.rotateX(-0.5);
+      leaf.translate(0, 0.04 * s, 0.09 * s);
+      leaf.rotateY(a);
+      leaf.translate(cx, 0.02, cz);
+      parts.push(paint(leaf, mix("#9ac86a", "#c8e8a0", r())));
+    }
+    // Feathery roots dangling below the surface.
+    for (let k = 0; k < 5; k++) {
+      const x = cx + (r() - 0.5) * 0.1;
+      const z = cz + (r() - 0.5) * 0.1;
+      const d = Math.min(ctx.waterH * 0.3, 0.45) * s;
+      parts.push(paint(tube([[x, 0, z], [x + (r() - 0.5) * 0.05, -d * 0.5, z], [x + (r() - 0.5) * 0.08, -d, z + (r() - 0.5) * 0.05]], 0.008, 3), "#d8c8a8"));
+    }
+  }
+  return { geometry: merge(parts), sway: 0.01 };
+}
+
+function mossyLog(): DecoModel {
+  const moss = (p: THREE.Vector3, f: number) => (p.y > 0.13 ? (speckle(f, 30) ? "#7aa84a" : "#5f8a3a") : BARK(p, f));
+  const parts = [
+    paint(tube([[-0.6, 0.11, 0], [0, 0.12, 0.02], [0.6, 0.1, -0.02]], 0.11, 7), moss),
+    paint(tf(cyl(0.11, 0.11, 0.02, 7), { r: [0, 0, Math.PI / 2], p: [0.61, 0.1, -0.02] }), "#a8865a"),
+    paint(tube([[0.2, 0.18, 0.0], [0.28, 0.35, 0.12], [0.26, 0.48, 0.22]], (t) => 0.025 * (1 - t * 0.5), 4), BARK),
+  ];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function hangingRoots(ctx: Ctx): DecoModel {
+  const r = rng(104);
+  const parts: THREE.BufferGeometry[] = [];
+  // A low branch just above the water with roots trailing down into it.
+  parts.push(paint(tube([[-0.6, 0.5, -0.1], [0, 0.42, 0], [0.6, 0.5, 0.1]], 0.07, 6), BARK));
+  for (let i = 0; i < 9; i++) {
+    const x = -0.5 + i * 0.12 + (r() - 0.5) * 0.06;
+    const z = (r() - 0.5) * 0.3;
+    const d = ctx.waterH * (0.25 + r() * 0.3);
+    parts.push(paint(tube([[x, 0.42, z], [x + (r() - 0.5) * 0.1, 0.1, z], [x + (r() - 0.5) * 0.12, -d * 0.6, z + (r() - 0.5) * 0.1], [x + (r() - 0.5) * 0.15, -d, z]], (t) => 0.018 * (1 - t * 0.6), 4), mix("#6e5232", "#a8865a", r())));
+  }
+  for (let i = 0; i < 6; i++) {
+    const g = leafShape(0.18, 0.08);
+    g.rotateZ(0.6);
+    g.rotateY(r() * Math.PI * 2);
+    g.translate((r() - 0.5) * 1.1, 0.5 + r() * 0.1, (r() - 0.5) * 0.3);
+    parts.push(paint(g, "#5f9e4a"));
+  }
+  return { geometry: merge(parts), sway: 0.01 };
+}
+
+function victoriaLily(): DecoModel {
+  const parts: THREE.BufferGeometry[] = [];
+  // Huge round pads with a red, upturned rim.
+  for (const [x, z, rad] of [[0, 0, 0.42], [0.55, 0.3, 0.3], [-0.45, 0.35, 0.26]] as [number, number, number][]) {
+    parts.push(paint(tf(cyl(rad, rad, 0.02, 16), { p: [x, 0.02, z] }), (_p, f) => (speckle(f, 15) ? "#4f8a3a" : "#5f9e4a")));
+    parts.push(paint(tf(new THREE.CylinderGeometry(rad + 0.02, rad, 0.07, 16, 1, true), { p: [x, 0.05, z] }), "#b8403a"));
+  }
+  // One pale flower.
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const pt = cone(0.05, 0.16, 3);
+    pt.rotateZ(0.6);
+    pt.rotateY(a);
+    pt.translate(0.55 + Math.cos(a) * 0.05, 0.1, -0.35 + Math.sin(a) * 0.05);
+    parts.push(paint(pt, k % 2 ? "#fff4f0" : "#f6c8d8"));
+  }
+  parts.push(paint(tf(ico(0.045, 0), { p: [0.55, 0.12, -0.35] }), "#f2d26a"));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function floodedTrunk(ctx: Ctx): DecoModel {
+  const top = ctx.waterH + 0.7;
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(cyl(0.16, 0.22, top, 7, 6), { p: [0, top / 2, 0] }), 0.02, 105), BARK)];
+  // Buttress roots flaring out at the base.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    parts.push(paint(tube([[0, 0.45, 0], [Math.cos(a) * 0.25, 0.15, Math.sin(a) * 0.25], [Math.cos(a) * 0.45, 0.02, Math.sin(a) * 0.45]], (t) => 0.07 * (1 - t * 0.6), 4), BARK));
+  }
+  // Branches and leaves above the waterline.
+  for (const [a, h] of [[0.4, 0.82], [2.6, 0.9], [4.4, 0.95]] as [number, number][]) {
+    const y = top * h;
+    parts.push(paint(tube([[0, y, 0], [Math.cos(a) * 0.3, y + 0.15, Math.sin(a) * 0.3], [Math.cos(a) * 0.5, y + 0.25, Math.sin(a) * 0.5]], 0.03, 4), BARK));
+    parts.push(paint(tf(ico(0.18, 0), { s: [1, 0.6, 1], p: [Math.cos(a) * 0.5, y + 0.3, Math.sin(a) * 0.5] }), "#5f9e4a"));
+  }
+  // A green waterline stain where the river usually sits.
+  parts.push(paint(tf(cyl(0.175, 0.175, 0.06, 7), { p: [0, ctx.waterH * 0.98, 0] }), "#6e7a3a"));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+// ───────────── Kelp Forest ─────────────
+
+const REEF_ROCK = (_p: THREE.Vector3, f: number) => (speckle(f, 22) ? "#4a525c" : speckle(f, 12, 4) ? "#c86a8a" : "#5a6470");
+
+/** One kelp stipe from the holdfast to `top`, with blades and gas floats along it. */
+function kelpStipe(parts: THREE.BufferGeometry[], r: () => number, ox: number, oz: number, top: number, phase: number) {
+  const pts: V3[] = [];
+  for (let i = 0; i <= 8; i++) pts.push([ox + Math.sin(i * 0.9 + phase) * 0.07, (top * i) / 8, oz + Math.cos(i * 0.8 + phase) * 0.05]);
+  parts.push(paint(tube(pts, 0.02, 4), "#7a6a2a"));
+  const n = Math.max(8, Math.round(top * 5));
+  for (let i = 1; i < n; i++) {
+    const y = (top * i) / n;
+    const t = i / n;
+    const x = ox + Math.sin(t * 8 * 0.9 + phase) * 0.07;
+    const leaf = sphere(0.5, 5, 3);
+    leaf.scale(0.06, 0.28, 0.012);
+    leaf.translate(0, 0.14, 0);
+    leaf.rotateZ((i % 2 ? 1 : -1) * (0.5 + r() * 0.4));
+    leaf.rotateY(r() * Math.PI);
+    leaf.translate(x, y, oz);
+    parts.push(paint(leaf, mix("#8a7a2f", "#b8a040", r())));
+    if (i % 3 === 0) parts.push(paint(tf(ico(0.03, 0), { p: [x, y, oz + 0.02] }), "#c8a83a"));
+  }
+}
+
+function kelpCluster(): DecoModel {
+  const r = rng(121);
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.16, 0), { s: [1, 0.5, 1], p: [0, 0.05, 0] }), 0.02, 122), "#6a5a2a")];
+  for (let s = 0; s < 4; s++) kelpStipe(parts, r, (s - 1.5) * 0.1, (r() - 0.5) * 0.15, 1.1 + r() * 0.6, s * 1.7);
+  return { geometry: merge(parts), sway: 0.02 };
+}
+
+function giantKelp(ctx: Ctx): DecoModel {
+  const r = rng(123);
+  const top = ctx.waterH * 0.98;
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.22, 0), { s: [1, 0.5, 1], p: [0, 0.06, 0] }), 0.03, 124), "#6a5a2a")];
+  for (let s = 0; s < 4; s++) kelpStipe(parts, r, (s - 1.5) * 0.12, (r() - 0.5) * 0.18, top, s * 1.3);
+  // The canopy: blades spreading out flat along the surface.
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + r() * 0.3;
+    const leaf = sphere(0.5, 5, 3);
+    leaf.scale(0.08, 0.012, 0.34);
+    leaf.translate(0, 0, 0.2);
+    leaf.rotateY(a);
+    leaf.translate(0, top - 0.02, 0);
+    parts.push(paint(leaf, mix("#8a7a2f", "#a89038", r())));
+  }
+  return { geometry: merge(parts), sway: 0.012 };
+}
+
+function rockyBoulder(): DecoModel {
+  const parts = [paint(jitter(tf(ico(0.5, 1), { s: [1.1, 0.75, 0.9], p: [0, 0.3, 0] }), 0.07, 125), REEF_ROCK)];
+  const r = rng(126);
+  for (let i = 0; i < 5; i++) parts.push(paint(tf(cyl(0.04, 0.05, 0.08, 6), { p: [(r() - 0.5) * 0.6, 0.55 + r() * 0.1, (r() - 0.5) * 0.4] }), mix("#ff8a6a", "#ffd0a0", r())));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function seaPalm(): DecoModel {
+  const r = rng(127);
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.14, 0), { s: [1, 0.5, 1], p: [0, 0.04, 0] }), 0.02, 128), REEF_ROCK)];
+  for (const [x, z, h] of [[0, 0, 0.7], [0.28, 0.15, 0.5], [-0.22, 0.2, 0.55]] as [number, number, number][]) {
+    parts.push(paint(tube([[x, 0.05, z], [x + 0.03, h * 0.5, z], [x - 0.02, h, z + 0.02]], 0.03, 5), "#8a6a3a"));
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      const leaf = sphere(0.5, 4, 3);
+      leaf.scale(0.035, 0.012, 0.22);
+      leaf.translate(0, 0, 0.11);
+      leaf.rotateX(0.7);
+      leaf.rotateY(a);
+      leaf.translate(x - 0.02, h, z + 0.02);
+      parts.push(paint(leaf, mix("#8a7a2f", "#a89a48", r())));
+    }
+  }
+  return { geometry: merge(parts), sway: 0.02 };
+}
+
+function abaloneRock(): DecoModel {
+  const parts = [paint(jitter(tf(ico(0.42, 1), { s: [1.1, 0.55, 0.9], p: [0, 0.18, 0] }), 0.05, 129), REEF_ROCK)];
+  const r = rng(130);
+  for (let i = 0; i < 4; i++) {
+    const a = r() * Math.PI * 2;
+    const g = tf(sphere(0.5, 7, 4), { s: [0.16, 0.06, 0.12], r: [0.3, a, 0], p: [Math.cos(a) * 0.25, 0.32, Math.sin(a) * 0.2] });
+    // Rough brick-red outside with a shimmer of mother-of-pearl.
+    parts.push(paint(g, (_p, f) => (speckle(f, 30) ? ["#9ad8e8", "#e8b8f0", "#c8f0d0"][f % 3] : "#9a5a4a")));
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function urchinBarren(): DecoModel {
+  const r = rng(131);
+  const parts: THREE.BufferGeometry[] = [paint(tf(cyl(0.55, 0.6, 0.04, 12), { p: [0, 0.02, 0] }), (_p, f) => (speckle(f, 25) ? "#c86a8a" : "#8a8a8a"))];
+  for (let i = 0; i < 14; i++) {
+    const x = (r() - 0.5) * 0.9;
+    const z = (r() - 0.5) * 0.9;
+    if (Math.hypot(x, z) > 0.5) continue;
+    parts.push(paint(tf(ico(0.05, 0), { p: [x, 0.08, z] }), "#4a1a5a"));
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      parts.push(paint(tf(cone(0.006, 0.08, 3), { r: [Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1], p: [x + Math.cos(a) * 0.04, 0.09, z + Math.sin(a) * 0.04] }), "#7a3a9a"));
+    }
+  }
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function sandyChannel(): DecoModel {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) parts.push(paint(jitter(tf(sphere(0.5, 8, 3), { s: [0.5, 0.05, 0.36], p: [0, 0.02, -0.7 + i * 0.35] }), 0.01, i), i % 2 ? "#e8dcb4" : "#d8c8a0"));
+  const r = rng(132);
+  for (let i = 0; i < 6; i++) parts.push(paint(tf(cone(0.03, 0.05, 5), { r: [0, 0, 1.4], p: [(r() - 0.5) * 0.4, 0.04, (r() - 0.5) * 1.2] }), mix("#f2e0c0", "#e8a080", r())));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function sunbeamGap(ctx: Ctx): DecoModel {
+  const top = ctx.waterH;
+  const parts: THREE.BufferGeometry[] = [paint(tf(cyl(0.5, 0.55, 0.02, 14), { p: [0, 0.015, 0] }), "#f4ead0")];
+  // Crossed sheets of light from the surface down to a bright patch of sand.
+  const rays: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const g = new THREE.PlaneGeometry(0.5, top, 1, 1);
+    g.translate(0, top / 2, 0);
+    g.rotateY((i / 3) * Math.PI);
+    rays.push(glow(paint(g, "#fff4c8"), 0.55));
+  }
+  return { geometry: merge(parts), sway: 0, glow: { geometry: merge(rays), color: "#fff8d8" }, dayGlow: true };
+}
+
+// ───────────── Polar Waters ─────────────
+
+const ICE = (p: THREE.Vector3, f: number) => (speckle(f, 22) ? "#cfe6f4" : p.y < 0 ? "#a8d0e8" : speckle(f, 14, 5) ? "#ffffff" : "#e6f4fc");
+
+/** A chunk of ice: a squashed, jittered rock shape. */
+function iceChunk(r: number, sx: number, sy: number, sz: number, seed: number) {
+  return jitter(tf(ico(r, 1), { s: [sx, sy, sz] }), r * 0.12, seed);
+}
+
+function snowyRock(): DecoModel {
+  const rock = jitter(tf(ico(0.45, 1), { s: [1.1, 0.7, 0.9], p: [0, 0.22, 0] }), 0.06, 141);
+  return { geometry: merge([paint(rock, (p, f) => (p.y > 0.36 ? (speckle(f, 15) ? "#dfeaf2" : "#f6fbff") : speckle(f, 20) ? "#5a6a78" : "#6f8fa8"))]), sway: 0 };
+}
+
+function frozenKelp(): DecoModel {
+  const r = rng(142);
+  const parts: THREE.BufferGeometry[] = [paint(jitter(tf(ico(0.16, 0), { s: [1, 0.5, 1], p: [0, 0.05, 0] }), 0.02, 143), "#6f8fa8")];
+  for (let s = 0; s < 4; s++) {
+    const ox = (s - 1.5) * 0.12;
+    const h = 0.8 + r() * 0.5;
+    const pts: V3[] = [];
+    for (let i = 0; i <= 5; i++) pts.push([ox + Math.sin(i * 0.9 + s) * 0.06, (h * i) / 5, Math.cos(i + s) * 0.05]);
+    parts.push(paint(tube(pts, 0.02, 4), "#6a7a5a"));
+    for (let i = 1; i < 8; i++) {
+      const leaf = sphere(0.5, 4, 3);
+      leaf.scale(0.05, 0.2, 0.012);
+      leaf.translate(0, 0.1, 0);
+      leaf.rotateZ((i % 2 ? 1 : -1) * 0.6);
+      leaf.translate(ox, (h * i) / 8, 0);
+      // Frost on the blade tips.
+      parts.push(paint(leaf, (p) => (p.y > (h * i) / 8 + 0.12 ? "#eef7ff" : mix("#6a7a4a", "#9ab8c8", r()))));
+    }
+  }
+  return { geometry: merge(parts), sway: 0.008 };
+}
+
+function iceShelfCrack(): DecoModel {
+  // A thick slab at the surface with a bright crack of daylight down the middle.
+  const parts: THREE.BufferGeometry[] = [];
+  for (const s of [-1, 1]) parts.push(paint(iceChunk(0.4, 1.4, 0.32, 1.6, 144 + s), ICE).translate(s * 0.48, 0.02, 0));
+  const crack = new THREE.PlaneGeometry(0.07, 1.1, 1, 6);
+  crack.rotateX(-Math.PI / 2);
+  crack.translate(0, 0.1, 0);
+  const light = new THREE.PlaneGeometry(0.35, 1.2);
+  light.translate(0, -0.6, 0);
+  return {
+    geometry: merge(parts),
+    sway: 0,
+    glow: { geometry: merge([glow(paint(crack, "#ffffff"), 1), glow(paint(light, "#e8f6ff"), 1)]), color: "#eaf8ff" },
+    dayGlow: true,
+  };
+}
+
+function floatingIce(): DecoModel {
+  const parts = [paint(iceChunk(0.38, 1.4, 0.35, 1.1, 145), ICE), paint(iceChunk(0.18, 1.2, 0.4, 1, 146), ICE).translate(0.5, 0, 0.3)];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function iceArch(): DecoModel {
+  const parts = [
+    paint(iceChunk(0.3, 0.8, 1.5, 0.8, 147), ICE).translate(-0.5, 0.42, 0),
+    paint(iceChunk(0.3, 0.8, 1.5, 0.8, 148), ICE).translate(0.5, 0.42, 0),
+    paint(tube([[-0.52, 0.75, 0], [-0.25, 1.05, 0], [0.25, 1.05, 0], [0.52, 0.75, 0]], 0.16, 6), ICE),
+  ];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function icebergUnderside(ctx: Ctx): DecoModel {
+  // Most of the berg hangs below the surface; just a little pokes up.
+  const depth = Math.min(ctx.waterH * 0.45, 2.4);
+  const parts: THREE.BufferGeometry[] = [
+    paint(jitter(tf(new THREE.ConeGeometry(0.62, depth, 7, 4), { r: [Math.PI, 0, 0], p: [0, -depth / 2, 0] }), 0.08, 149), ICE),
+    paint(iceChunk(0.4, 1.4, 0.5, 1.2, 150), ICE).translate(0, 0.08, 0),
+    paint(iceChunk(0.2, 1, 1.4, 1, 151), ICE).translate(0.2, 0.28, -0.1),
+  ];
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function iceCave(): DecoModel {
+  const mound = jitter(tf(new THREE.SphereGeometry(0.55, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), { s: [1.1, 0.9, 1] }), 0.06, 152);
+  const parts = [paint(mound, ICE)];
+  // The dark mouth of the cave.
+  parts.push(paint(tf(new THREE.CircleGeometry(0.22, 8), { p: [0, 0.18, 0.56] }), "#2e5a7a"));
+  return { geometry: merge(parts), sway: 0 };
+}
+
+function auroraCrystal(): DecoModel {
+  const r = rng(153);
+  const parts: THREE.BufferGeometry[] = [paint(snowyRock().geometry.clone().scale(0.6, 0.5, 0.6), "#6f8fa8")];
+  const glows: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const h = 0.3 + r() * 0.45;
+    const g = cone(0.06 + r() * 0.04, h, 5);
+    g.translate(0, h / 2, 0);
+    g.rotateZ((r() - 0.5) * 0.7);
+    g.rotateX((r() - 0.5) * 0.7);
+    g.translate((r() - 0.5) * 0.4, 0.18, (r() - 0.5) * 0.4);
+    const col = mix("#6dffb4", "#a07bff", r());
+    parts.push(glow(paint(g.clone(), col), 0.35));
+    glows.push(paint(g.scale(1.02, 1.02, 1.02), col));
+  }
+  // The crystals light up at night (Decorations shows glow geometry after dark).
+  return { geometry: merge(parts), sway: 0, glow: { geometry: merge(glows), color: "#9affd0" } };
+}
+
 const BUILDERS: Record<string, (ctx: Ctx) => DecoModel> = {
   "lily-pads": lilyPads,
   "firefly-reeds": fireflyReeds,
@@ -590,6 +1080,38 @@ const BUILDERS: Record<string, (ctx: Ctx) => DecoModel> = {
   "hydrothermal-vent": hydrothermalVent,
   "brine-pool": brinePool,
   "whale-fall": whaleFall,
+  "barnacle-rock": barnacleRock,
+  "mussel-cluster": musselCluster,
+  "green-anemone": greenAnemone,
+  "sea-lettuce": seaLettuce,
+  "coralline-algae": corallineAlgae,
+  "tide-puddle": tidePuddle,
+  driftwood,
+  "sea-arch": seaArch,
+  "river-stones": riverStones,
+  "sunken-branch": sunkenBranch,
+  "floating-leaves": floatingLeaves,
+  "water-lettuce": waterLettuce,
+  "mossy-log": mossyLog,
+  "hanging-roots": hangingRoots,
+  "victoria-lily": victoriaLily,
+  "flooded-trunk": floodedTrunk,
+  "kelp-cluster": kelpCluster,
+  "giant-kelp": giantKelp,
+  "rocky-boulder": rockyBoulder,
+  "sea-palm": seaPalm,
+  "abalone-rock": abaloneRock,
+  "urchin-barren": urchinBarren,
+  "sandy-channel": sandyChannel,
+  "sunbeam-gap": sunbeamGap,
+  "snowy-rock": snowyRock,
+  "frozen-kelp": frozenKelp,
+  "ice-shelf-crack": iceShelfCrack,
+  "floating-ice": floatingIce,
+  "ice-arch": iceArch,
+  "iceberg-underside": icebergUnderside,
+  "ice-cave": iceCave,
+  "aurora-crystal": auroraCrystal,
 };
 
 const cache = new Map<string, DecoModel>();

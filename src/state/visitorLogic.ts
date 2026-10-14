@@ -3,7 +3,8 @@
 // The timer runs on the real clock and is saved, so it keeps going in another tab or
 // with the game closed. When it's up, one visitor waits for you (never more), and the
 // timer only starts again once that visitor has been dealt with.
-import type { BiomeId } from "../data/biomes";
+import { BIOMES, type BiomeId } from "../data/biomes";
+import { isHighTide, TIDES } from "../data/signatures";
 import { SPECIES_BY_ID, SIZE_SPACE } from "../data/creatures";
 import { spawnHints, visitorPos } from "./handoff";
 import { play } from "../utils/audio";
@@ -18,7 +19,10 @@ const article = (word: string) => (/^[aeiou]/i.test(word) ? "An" : "A");
 
 export function scheduleNextVisitor(now = Date.now()) {
   const { minIntervalSec, maxIntervalSec } = ECONOMY.visitor;
-  useGame.getState().setVisitorDue(now + (minIntervalSec + Math.random() * (maxIntervalSec - minIntervalSec)) * 1000);
+  // High tide in the Tidepool brings visitors a little sooner.
+  const g = useGame.getState();
+  const tide = BIOMES[g.activeBiome].signature === "tides" && isHighTide(now) ? TIDES.highTideVisitorInterval : 1;
+  g.setVisitorDue(now + (minIntervalSec + Math.random() * (maxIntervalSec - minIntervalSec)) * 1000 * tide);
 }
 
 /** Now and then an old friend from the Sanctuary comes back instead of a new visitor. */

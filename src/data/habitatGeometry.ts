@@ -38,9 +38,9 @@ export function lerpDims(a: Dims, b: Dims, t: number): Dims {
   return { w: a.w + (b.w - a.w) * t, h: a.h + (b.h - a.h) * t, d: a.d + (b.d - a.d) * t, soil: a.soil + (b.soil - a.soil) * t };
 }
 
-const SEEDS: Record<BiomeId, number> = { swamp: 1.7, reef: 4.2, ocean: 7.1, deep: 2.9, polar: 5.5 };
+const SEEDS: Record<BiomeId, number> = { swamp: 1.7, tidepool: 3.6, reef: 4.2, amazon: 6.3, ocean: 7.1, kelp: 8.4, deep: 2.9, polar: 5.5 };
 
-/** Highest the terrain bumps go (world units). */
+/** Highest the terrain bumps go (world units), unless a habitat sets its own. */
 export const TERRAIN_MAX = 0.32;
 
 function smooth(e0: number, e1: number, x: number) {
@@ -60,7 +60,7 @@ export function terrainHeight(biome: BiomeId, x: number, z: number, dims: Dims =
   const edge = Math.min(dims.w / 2 - Math.abs(x), dims.d / 2 - Math.abs(z));
   const falloff = smooth(0, 0.5, edge);
   const n = 0.5 + 0.3 * Math.sin(x * 1.3 + s) * Math.cos(z * 1.1 + s * 2) + 0.2 * Math.sin(x * 2.7 - z * 1.9 + s * 3);
-  return Math.max(0, n) * TERRAIN_MAX * falloff + 0.03;
+  return Math.max(0, n) * (BIOMES[biome].terrainMax ?? TERRAIN_MAX) * falloff + 0.03;
 }
 
 /** Decoration size multiplier. Fixed per habitat (Lv1 grid) so decorations never resize. */

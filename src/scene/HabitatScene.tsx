@@ -13,7 +13,7 @@ import { Atmosphere } from "./Atmosphere";
 import { CameraRig } from "./CameraRig";
 import { Creature } from "./Creature";
 import { CreatureSchool } from "./CreatureSchool";
-import { Decorations } from "./Decorations";
+import { Decorations, Scenery } from "./Decorations";
 import { Departures } from "./Departures";
 import { Diorama, LightShafts } from "./Diorama";
 import { Eggs } from "./Eggs";
@@ -21,6 +21,7 @@ import { ExpansionBurst } from "./ExpansionBurst";
 import { Feeding } from "./Feeding";
 import { creaturePositions, expansionCtx } from "./registry";
 import { sceneLookup } from "../state/handoff";
+import { Signature } from "./Signatures";
 import { TerrainFeatures } from "./TerrainFeatures";
 import { Visitor } from "./Visitor";
 
@@ -103,6 +104,8 @@ export function HabitatScene({ biome }: { biome: BiomeId }) {
 
       <Diorama biome={biome} quality={quality} level={level} fromLevel={expansion ? expansion.from : null} preview={preview && !expansion} />
       <TerrainFeatures biome={biome} level={level} dims={dims} growingTo={expansion ? expansion.to : null} />
+      <Scenery biome={biome} dims={dims} castShadow={high && !isTouchDevice()} />
+      <Signature biome={biome} dims={dims} high={high} />
       {habitat && (
         // Phones skip decoration shadows: it halves the shadow-pass draw calls in a full Lv5 habitat.
         <Decorations biome={biome} placed={habitat.decorations} decorating={decorating} castShadow={high && !isTouchDevice()} level={simLevel} dims={dims} />
@@ -148,7 +151,7 @@ export function HabitatScene({ biome }: { biome: BiomeId }) {
         opacity={0.45}
         color={biome === "swamp" ? p.glow : "#ffffff"}
       />
-      {high && (biome === "reef" || biome === "ocean") && <LightShafts dims={dims} count={moreLight >= 2 && level >= moreLight ? 9 : 5} />}
+      {high && b.lightShafts > 0 && <LightShafts dims={dims} count={moreLight >= 2 && level >= moreLight ? Math.round(b.lightShafts * 1.8) : b.lightShafts} />}
 
       {high && biome === "deep" && (
         <Suspense fallback={null}>

@@ -96,6 +96,21 @@ function bacteriaField() {
 const cache = new Map<string, FeaturePart[]>();
 
 /** Parts for a terrain feature. `waterH` is in decoration units (for reeds, kelp, mangroves). */
+/** Tidepool: a tall, wet rock pillar with a band of barnacles. */
+function seaStack() {
+  const rock = (_p: THREE.Vector3, f: number) => (speckle(f, 20) ? "#5a5656" : speckle(f, 12, 3) ? "#8a8484" : "#6e6a6a");
+  const parts = [paint(jitter(tf(cyl(0.32, 0.5, 1.6, 8, 4), { p: [0, 0.8, 0] }), 0.08, 61), rock)];
+  const r = rng(62);
+  for (let i = 0; i < 26; i++) {
+    const a = r() * Math.PI * 2;
+    const y = 0.15 + r() * 0.5;
+    const k = 0.48 - y * 0.12;
+    parts.push(paint(tf(cyl(0.02, 0.045, 0.04, 5), { p: [Math.cos(a) * k, y, Math.sin(a) * k] }), "#efe9dc"));
+  }
+  parts.push(paint(tf(sphere(0.5, 6, 3), { s: [0.5, 0.08, 0.5], p: [0, 1.6, 0] }), "#7aa87a"));
+  return merge(parts);
+}
+
 export function getFeatureParts(id: string, waterH: number): FeaturePart[] {
   const key = id + "|" + waterH.toFixed(2);
   const hit = cache.get(key);
@@ -148,6 +163,48 @@ export function getFeatureParts(id: string, waterH: number): FeaturePart[] {
       break;
     case "bacteria-field":
       parts = [own(bacteriaField())];
+      break;
+    case "barnacle-ridge":
+      parts = [deco("barnacle-rock", -0.6, 0, 1.1), deco("barnacle-rock", 0.15, 0.2, 0.9, 1.2), deco("barnacle-rock", 0.8, -0.1, 1.2, 2.4)];
+      break;
+    case "sea-stack":
+      parts = [own(seaStack())];
+      break;
+    case "mussel-bed":
+      parts = [deco("mussel-cluster", -0.5, 0, 1.1), deco("mussel-cluster", 0.3, 0.25, 1, 1.4), deco("mussel-cluster", 0.4, -0.35, 0.9, 2.6)];
+      break;
+    case "anemone-garden":
+      parts = [deco("green-anemone", -0.45, 0, 1.1), deco("coralline-algae", 0.35, 0.25, 0.9, 1.1), deco("green-anemone", 0.5, -0.3, 0.8, 2)];
+      break;
+    case "root-curtain":
+      parts = [deco("hanging-roots", 0, 0, 1.2), deco("hanging-roots", 0.8, 0.3, 1, 0.8)];
+      break;
+    case "sandy-bank":
+      parts = [own(sandbar())];
+      break;
+    case "flooded-grove":
+      parts = [deco("flooded-trunk", 0, 0, 1.1), deco("flooded-trunk", 0.8, 0.4, 0.85, 1.7)];
+      break;
+    case "lily-lagoon":
+      parts = [deco("victoria-lily", 0, 0, 1.2), deco("victoria-lily", -0.9, 0.5, 0.9, 2.1)];
+      break;
+    case "kelp-thicket":
+      parts = [deco("giant-kelp", -0.5, 0, 1), deco("giant-kelp", 0.3, 0.3, 0.9, 1.4), deco("kelp-cluster", 0.5, -0.4, 1, 2.2)];
+      break;
+    case "boulder-field":
+      parts = [deco("rocky-boulder", -0.5, 0, 1), deco("rocky-boulder", 0.45, 0.25, 0.7, 1.3), deco("abalone-rock", 0.3, -0.45, 0.8, 2.4)];
+      break;
+    case "ice-floes":
+      parts = [deco("floating-ice", 0, 0, 1), deco("floating-ice", -0.8, 0.4, 0.7, 1.5), deco("floating-ice", 0.6, 0.5, 0.6, 2.8)];
+      break;
+    case "ice-cave-edge":
+      parts = [deco("ice-cave", 0, 0, 1.3), deco("snowy-rock", 0.9, 0.3, 0.7, 1)];
+      break;
+    case "iceberg-keel":
+      parts = [deco("iceberg-underside", 0, 0, 1.5)];
+      break;
+    case "aurora-crystals":
+      parts = [deco("aurora-crystal", 0, 0, 1.1), deco("aurora-crystal", 0.7, 0.3, 0.8, 1.2), deco("aurora-crystal", -0.6, 0.35, 0.7, 2.5)];
       break;
     default:
       parts = [];

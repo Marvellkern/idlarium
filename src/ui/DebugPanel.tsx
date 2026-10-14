@@ -8,6 +8,10 @@ import { uid } from "../utils/id";
 import { expandHabitat } from "../state/expandLogic";
 import { useUI } from "../state/uiStore";
 import { getHourOverride, setHourOverride } from "../utils/time";
+import { BIOME_ORDER, BIOMES } from "../data/biomes";
+import { getTideOverride, setTideOverride } from "../data/signatures";
+import { newHabitat } from "../state/economy";
+import { useWeather } from "../state/weather";
 
 const HOUR = 3600_000;
 
@@ -56,6 +60,40 @@ export default function DebugPanel() {
         <option value="18">18:00 dusk</option>
         <option value="23">23:00 night</option>
       </select>
+      <button
+        className={btn}
+        onClick={() => {
+          // Unlock every built habitat (keeps what's already there).
+          const s = g();
+          const open = BIOME_ORDER.filter((b) => BIOMES[b].playable);
+          const habitats = { ...s.habitats };
+          for (const b of open) habitats[b] ??= newHabitat(Date.now());
+          useGame.setState({ biomesUnlocked: open, habitats });
+        }}
+      >
+        Unlock all habitats
+      </button>
+      {BIOMES[biome].signature === "tides" && (
+        <select
+          className="min-h-9 rounded-lg bg-white/80 px-1 text-xs font-bold"
+          value={getTideOverride() ?? ""}
+          onChange={(e) => {
+            setTideOverride(e.target.value === "" ? null : Number(e.target.value));
+            useUI.getState().bumpClock();
+          }}
+          aria-label="Pretend tide"
+        >
+          <option value="">Real tide</option>
+          <option value="0">Low tide</option>
+          <option value="0.5">Mid tide</option>
+          <option value="1">High tide</option>
+        </select>
+      )}
+      {BIOMES[biome].signature === "rain" && (
+        <button className={btn} onClick={() => (useWeather.getState().rainUntil > Date.now() ? useWeather.getState().stopRain() : useWeather.getState().startRain(3))}>
+          Toggle rain
+        </button>
+      )}
       <button className={btn} onClick={() => g().debugAddPearls(1000)}>+1K pearls</button>
       <button className={btn} onClick={() => g().debugAddPearls(100000)}>+100K pearls</button>
       <button className={btn} onClick={() => g().debugAddPearls(1e9)}>+1B pearls</button>

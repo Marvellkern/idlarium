@@ -9,6 +9,7 @@ import { daylight } from "../utils/time";
 import type { Dims } from "../data/habitatGeometry";
 import { mix } from "./models/geo";
 import { habitatCtx, sceneTime } from "./registry";
+import { AURORA, RAIN } from "../data/signatures";
 
 interface LightSet {
   sun: string;
@@ -30,8 +31,10 @@ function dayLights(biome: BiomeId): LightSet {
     case "deep":
       // No sunlight at all: a faint blue key so shapes still read, glow does the rest.
       return { sun: "#7fa8ff", sunI: 0.75, sky: "#2a4a78", ground: "#05070c", hemiI: 0.95, ambient: 0.22 };
-    default:
-      return { sun: "#ffffff", sunI: 2.0, sky: mix(p.water, "#ffffff", 0.6), ground: p.soil, hemiI: 1.1, ambient: 0.25 };
+    default: {
+      const o = BIOMES[biome].lighting ?? {};
+      return { sun: o.sun ?? "#ffffff", sunI: o.sunI ?? 2.0, sky: mix(p.water, "#ffffff", 0.6), ground: p.soil, hemiI: o.hemiI ?? 1.1, ambient: o.ambient ?? 0.25 };
+    }
   }
 }
 
@@ -59,6 +62,7 @@ export function Atmosphere({ biome, shadows, dims }: { biome: BiomeId; shadows: 
       nightSky: new THREE.Color(NIGHT.sky),
       dayGround: new THREE.Color(day.ground),
       nightGround: new THREE.Color(NIGHT.ground),
+      aurora: new THREE.Color(AURORA.colors[0]),
       dayFog: new THREE.Color(mix(b.palette.deep, b.palette.bgBottom, 0.5)),
       nightFog: new THREE.Color(mix(b.palette.deep, NIGHT_FOG, 0.75)),
     }),
@@ -79,14 +83,18 @@ export function Atmosphere({ biome, shadows, dims }: { biome: BiomeId; shadows: 
     habitatCtx.daylight = k;
     // In the deep, "day" lighting is the only lighting.
     const t = b.sunlit ? k : 1;
+    // Amazon showers soften the light a little.
+    const rainDim = 1 - (1 - RAIN.lightDim) * habitatCtx.rain;
     if (sun.current) {
       sun.current.color.lerpColors(c.nightSun, c.daySun, t);
-      sun.current.intensity = THREE.MathUtils.lerp(NIGHT.sunI, day.sunI, t);
+      sun.current.intensity = THREE.MathUtils.lerp(NIGHT.sunI, day.sunI, t) * rainDim;
     }
     if (hemi.current) {
       hemi.current.color.lerpColors(c.nightSky, c.daySky, t);
       hemi.current.groundColor.lerpColors(c.nightGround, c.dayGround, t);
       hemi.current.intensity = THREE.MathUtils.lerp(NIGHT.hemiI, day.hemiI, t);
+      // The aurora's light tints the water faintly.
+      if (habitatCtx.aurora > 0) hemi.current.color.lerp(c.aurora, AURORA.tint * habitatCtx.aurora);
     }
     if (amb.current) amb.current.intensity = THREE.MathUtils.lerp(NIGHT.ambient, day.ambient, t);
     const f = fogRef.current;

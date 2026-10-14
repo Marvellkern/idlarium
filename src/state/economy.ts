@@ -5,6 +5,7 @@ import { BIOMES, type BiomeId } from "../data/biomes";
 import {
   canBreed,
   COST_GROWTH,
+  eggOnlySpecies,
   SIZE_SPACE,
   SPECIES_BY_ID,
   VISITOR_RARITY_WEIGHT,
@@ -16,6 +17,7 @@ import { GOAL_REWARD_FLOOR, GOALS, GOALS_PER_DAY, type GoalContext } from "../da
 import { SIZE_LEVELS, TERRAIN_FEATURES } from "../data/expansion";
 import { clampLevel, newSlotsAt } from "../data/habitatGeometry";
 import { DECORATION_BY_ID } from "../data/decorations";
+import { isHighTide, TIDES } from "../data/signatures";
 import type { DailyGoal, Egg, HabitatSave, SaveData } from "./types";
 
 export const ECONOMY = {
@@ -56,6 +58,8 @@ export const ECONOMY = {
     maxWaiting: 3,
     /** Chance a hatchling is a color variant (if the species has any). */
     variantChance: 0.1,
+    /** Chance an egg laid in a habitat with egg-only species is one of those instead. */
+    surpriseChance: 0.2,
   },
   expansion: {
     /** One-time reward the first time any habitat reaches max size: minutes of income, with a floor. */
@@ -261,6 +265,8 @@ export function visitorWeights(biome: BiomeId, h: HabitatSave | undefined, codex
     .map((s) => {
       let w = (s.visitorWeight ?? VISITOR_RARITY_WEIGHT[s.rarity]) * (boosts[s.id] ?? 1);
       if (codex[s.id] === "owned") w *= ECONOMY.visitor.ownedWeight;
+      // Tidepool: some visitors mostly wander in at high tide.
+      if (s.highTide && BIOMES[biome].signature === "tides") w *= isHighTide() ? TIDES.highTideVisitorBoost : 1 / TIDES.highTideVisitorBoost;
       return { species: s, weight: w };
     })
     .filter((x) => x.weight > 0);
@@ -344,18 +350,23 @@ export function breedingSpecies(h: HabitatSave | undefined) {
 
 /**
  * Roll for new eggs over `hours` of real time. Works for a 0.25 s live tick and
- * for an 8 h offline gap alike. Never exceeds the waiting cap.
+ * for an 8 h offline gap alike. Never exceeds the waiting cap. `boost` multiplies
+ * the chance (Amazon rain). Some eggs turn out to be the habitat's egg-only species.
  */
-export function rollEggs(h: HabitatSave, hours: number, now: number, rand = Math.random): Egg[] {
+export function rollEggs(h: HabitatSave, hours: number, now: number, rand = Math.random, boost = 1): Egg[] {
   const room = ECONOMY.eggs.maxWaiting - h.eggs.length;
   if (room <= 0 || hours <= 0) return [];
   const laid: Egg[] = [];
   for (const sp of breedingSpecies(h)) {
-    const rate = ECONOMY.eggs.chancePerHour[sp.rarity];
+    const rate = ECONOMY.eggs.chancePerHour[sp.rarity] * boost;
     // Expected eggs = rate × hours; whole part guaranteed, fraction by chance.
     const expected = rate * hours;
     let n = Math.floor(expected) + (rand() < expected % 1 ? 1 : 0);
-    while (n-- > 0 && laid.length < room) laid.push({ speciesId: sp.id, laidAt: now });
+    const surprises = eggOnlySpecies(sp.biome).filter((s) => s.id !== sp.id);
+    while (n-- > 0 && laid.length < room) {
+      const surprise = surprises.length && rand() < ECONOMY.eggs.surpriseChance ? surprises[Math.floor(rand() * surprises.length)] : null;
+      laid.push({ speciesId: (surprise ?? sp).id, laidAt: now });
+    }
   }
   return laid;
 }

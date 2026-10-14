@@ -1042,6 +1042,732 @@ function spermWhale(c: string[]): Built {
   return { geometry: merge(parts), swim: { amp: 0.03, freq: 3, mode: SwimMode.FLUKE } };
 }
 
+// ───────────────────────── Tidepool ─────────────────────────
+
+/** Walking legs: from the body edge up to a knee and down to the ground. */
+function walkingLegs(parts: THREE.BufferGeometry[], o: { n: number; x: number; z0: number; dz: number; reach: number; lift: number; drop: number; r: number; color: string }) {
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < o.n; i++) {
+      const z = o.z0 - i * o.dz;
+      const sweep = (i - (o.n - 1) / 2) * 0.05;
+      const base: V3 = [s * o.x, 0.03, z];
+      const knee: V3 = [s * (o.x + o.reach * 0.55), o.lift, z - sweep];
+      const foot: V3 = [s * (o.x + o.reach), o.drop, z - sweep * 2.2];
+      parts.push(paint(tube([base, knee, foot], (t) => o.r * (1 - t * 0.6), 4), o.color));
+    }
+  }
+}
+
+/**
+ * Crabs. Authored facing +z; with `sideways` the whole crab is turned so its
+ * front faces +x, which makes it walk sideways as it moves forward.
+ */
+function crab(c: string[], o: { sideways?: boolean; reach?: number; claw?: number; tall?: boolean } = {}): Built {
+  const [c0, c1, c2] = c;
+  const parts: THREE.BufferGeometry[] = [];
+  const shellH = o.tall ? 0.24 : 0.18;
+  parts.push(paint(tf(sphere(0.5, 9, 5), { s: [0.56, shellH, 0.42], p: [0, 0.07, 0] }), (p, f) => (p.y < 0.03 ? c1 : speckle(f, 20) ? mix(c0, c2, 0.4) : c0)));
+  walkingLegs(parts, { n: 4, x: 0.22, z0: 0.08, dz: 0.075, reach: o.reach ?? 0.3, lift: 0.15, drop: -0.07, r: 0.026, color: mix(c0, c1, 0.2) });
+  const cl = o.claw ?? 1;
+  for (const s of [-1, 1]) {
+    parts.push(paint(tube([[s * 0.15, 0.06, 0.15], [s * 0.24, 0.1, 0.27], [s * 0.15, 0.08, 0.35]], 0.028 * cl, 4), c0));
+    parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.1 * cl, 0.08 * cl, 0.14 * cl], p: [s * 0.13, 0.08, 0.42] }), (p) => (p.z > 0.47 ? c2 : c0)));
+    parts.push(paint(tf(cyl(0.011, 0.011, 0.08, 4), { p: [s * 0.07, 0.17, 0.17] }), c0));
+    parts.push(paint(tf(ico(0.022, 0), { p: [s * 0.07, 0.22, 0.17] }), EYE));
+  }
+  const g = merge(parts);
+  if (o.sideways) g.rotateY(Math.PI / 2);
+  return { geometry: g, swim: { amp: 0.006, freq: 8, mode: SwimMode.FISH } };
+}
+
+function hermitCrab(c: string[]): Built {
+  const [shell, body, light] = c;
+  const parts: THREE.BufferGeometry[] = [];
+  // A coiled snail shell: shrinking whorls stacked up and back.
+  for (let i = 0; i < 5; i++) {
+    const r = 0.22 * (1 - i * 0.17);
+    const a = i * 1.15;
+    const g = tf(sphere(r, 8, 6), { p: [Math.sin(a) * 0.05, 0.17 + i * 0.07, -0.1 - i * 0.05 + Math.cos(a) * 0.03] });
+    parts.push(paint(g, (p, f) => (Math.floor((p.y + p.z) * 22) % 3 === 0 ? light : speckle(f, 15) ? mix(shell, "#000000", 0.15) : shell)));
+  }
+  parts.push(paint(tf(cone(0.04, 0.12, 5), { r: [-0.6, 0, 0], p: [0.02, 0.5, -0.33] }), light));
+  // The crab peeking out of the opening.
+  parts.push(paint(tf(sphere(0.5, 7, 5), { s: [0.2, 0.13, 0.16], p: [0, 0.09, 0.14] }), body));
+  parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.12, 0.1, 0.16], p: [0.1, 0.07, 0.3] }), (p) => (p.z > 0.35 ? light : body)));
+  parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.07, 0.06, 0.1], p: [-0.09, 0.06, 0.27] }), body));
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      const z = 0.16 - i * 0.07;
+      parts.push(paint(tube([[s * 0.08, 0.06, z], [s * 0.2, 0.12, z + 0.03], [s * 0.27, -0.06, z + 0.06]], (t) => 0.022 * (1 - t * 0.5), 4), body));
+    }
+    parts.push(paint(tf(cyl(0.01, 0.01, 0.07, 4), { p: [s * 0.04, 0.17, 0.2] }), body));
+    parts.push(paint(tf(ico(0.018, 0), { p: [s * 0.04, 0.21, 0.2] }), EYE));
+    parts.push(paint(tube([[s * 0.03, 0.12, 0.22], [s * 0.08, 0.2, 0.36], [s * 0.14, 0.22, 0.46]], 0.005, 3), light));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.004, freq: 6, mode: SwimMode.FISH } };
+}
+
+/** Sea stars: a flat disc with tapering arms and little bumps. */
+function seaStar(c: string[], arms = 5, armLen = 0.45, armW = 0.11): Built {
+  const [c0, c1, c2] = c;
+  const parts: THREE.BufferGeometry[] = [paint(tf(cyl(0.14, 0.15, 0.07, arms * 2), { p: [0, 0.035, 0] }), (p) => (p.y < 0.01 ? c1 : c0))];
+  for (let i = 0; i < arms; i++) {
+    const a = (i / arms) * Math.PI * 2;
+    const g = cone(armW, armLen, 5);
+    g.rotateZ(-Math.PI / 2);
+    g.scale(1, 0.45, 1);
+    g.translate(armLen / 2 + 0.08, 0.03, 0);
+    g.rotateY(a);
+    parts.push(paint(g, (p) => (p.y < 0.012 ? c1 : c0)));
+    // Many-armed stars skip the little bumps (they'd add up to a lot of triangles).
+    for (let k = 1; k < (arms > 8 ? 1 : 5); k++) {
+      const d = 0.1 + (k / 5) * armLen;
+      parts.push(paint(tf(ico(0.022 * (1 - k * 0.12), 0), { p: [Math.cos(a) * d, 0.06 - k * 0.006, -Math.sin(a) * d] }), c2));
+    }
+  }
+  return { geometry: merge(parts), swim: { amp: 0, freq: 1, mode: SwimMode.FISH } };
+}
+
+function sculpin(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.12,
+    w: 0.11,
+    tailZ: -0.3,
+    noseZ: 0.42,
+    profile: [0.22, 0.32, 0.48, 0.66, 0.84, 0.98, 1.0, 0.86, 0.0],
+    tail: "round",
+    dorsal: "long",
+    dorsalSize: 0.8,
+    pectoral: 1.3,
+    pectoralColor: mix(c[0], c[2], 0.3),
+    eye: 0.034,
+    eyeTop: true,
+    pattern: (p, f) => (speckle(f, 30) ? c[1] : speckle(f, 14, 4) ? c[2] : p.y < -0.05 ? mix(c[0], "#ffffff", 0.35) : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.07, freq: 7, mode: SwimMode.FISH } };
+}
+
+function blenny(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.1,
+    w: 0.075,
+    tailZ: -0.42,
+    noseZ: 0.44,
+    profile: [0.3, 0.45, 0.62, 0.78, 0.9, 0.98, 1.0, 0.96, 0.0],
+    tail: "round",
+    dorsal: "long",
+    dorsalSize: 1.15,
+    anal: "long",
+    pectoral: 1.0,
+    eye: 0.03,
+    eyeTop: true,
+    pattern: (p, f) => (Math.floor((p.z + 1) * 12) % 2 && p.y > -0.02 ? c[2] : speckle(f, 22) ? c[1] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.09, freq: 7, mode: SwimMode.FISH } };
+}
+
+function nudibranch(c: string[]): Built {
+  const [c0, c1, c2] = c;
+  const body = lathe([[0.004, -0.5], [0.04, -0.4], [0.07, -0.2], [0.08, 0], [0.08, 0.2], [0.07, 0.34], [0.045, 0.45], [0, 0.5]], 8);
+  body.scale(1.3, 0.7, 1);
+  const parts: THREE.BufferGeometry[] = [
+    paint(body, (p) => (Math.abs(p.x) < 0.025 && p.y > 0 ? c1 : c0)),
+    paint(tf(sphere(0.5, 8, 3), { s: [0.24, 0.025, 0.95], p: [0, -0.04, 0] }), c0),
+  ];
+  // Cerata: soft spikes along the back, bright with pale tips.
+  for (let i = 0; i < 8; i++) {
+    const z = -0.34 + i * 0.08;
+    for (const s of [-1, 1]) {
+      for (const k of [0, 1]) {
+        const g = cone(0.022, 0.12 - k * 0.02, 4);
+        g.translate(0, 0.06, 0);
+        g.rotateX(-0.35);
+        g.rotateZ(-s * (0.35 + k * 0.45));
+        g.translate(s * (0.03 + k * 0.04), 0.04, z + k * 0.02);
+        parts.push(paint(g, (p) => (p.y > 0.13 - k * 0.02 ? "#ffffff" : c2)));
+      }
+    }
+  }
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(cone(0.014, 0.12, 4), { r: [0.3, 0, -s * 0.2], p: [s * 0.035, 0.09, 0.4] }), c2));
+    parts.push(paint(tube([[s * 0.03, 0.0, 0.46], [s * 0.08, 0.0, 0.56], [s * 0.13, -0.01, 0.6]], 0.008, 3), c1));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.03, freq: 3, mode: SwimMode.FISH } };
+}
+
+function seaHare(c: string[]): Built {
+  const [c0, c1, c2] = c;
+  const skin = (_p: THREE.Vector3, f: number) => (speckle(f, 22) ? c1 : c0);
+  const parts: THREE.BufferGeometry[] = [
+    paint(tf(sphere(0.5, 9, 6), { s: [0.32, 0.26, 0.62], p: [0, 0.1, -0.06] }), skin),
+    paint(tf(sphere(0.5, 7, 5), { s: [0.16, 0.13, 0.2], p: [0, 0.06, 0.32] }), skin),
+  ];
+  // Parapodia: soft flaps folded up over the back.
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.05, 0.16, 0.42], r: [0, 0, s * 0.45], p: [s * 0.09, 0.22, -0.08] }), (p) => (p.y > 0.28 ? c2 : c0)));
+    parts.push(paint(tf(cone(0.03, 0.14, 4), { r: [0.35, 0, -s * 0.35], p: [s * 0.05, 0.17, 0.36] }), c0));
+    parts.push(paint(tube([[s * 0.04, 0.02, 0.42], [s * 0.1, 0.0, 0.5], [s * 0.14, -0.02, 0.52]], 0.014, 3), c0));
+    parts.push(paint(tf(ico(0.012, 0), { p: [s * 0.05, 0.1, 0.4] }), EYE));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.025, freq: 2.5, mode: SwimMode.FISH } };
+}
+
+interface PinnipedOpts {
+  bulk?: number;
+  ears?: boolean;
+  tusks?: boolean;
+  spots?: number;
+  fore?: number;
+  head?: number;
+  /** Belly color (defaults to colors[1]). */
+  belly?: string;
+}
+
+/** Seals, sea lions and walruses: one fusiform body with flippers. */
+function pinniped(c: string[], o: PinnipedOpts = {}): Built {
+  const [c0, c1, c2] = c;
+  const b = o.bulk ?? 1;
+  const hd = o.head ?? 1;
+  const body = lathe(
+    [[0.02, -0.5], [0.06, -0.43], [0.1, -0.32], [0.14, -0.14], [0.15, 0.02], [0.135, 0.15], [0.1, 0.25], [0.085 * hd, 0.31], [0.09 * hd, 0.37], [0.08 * hd, 0.43], [0.045 * hd, 0.48], [0, 0.5]].map(
+      ([r, z]) => [r * b, z] as [number, number],
+    ),
+    9,
+  );
+  body.scale(1, 0.9, 1);
+  const belly = o.belly ?? c1;
+  const parts: THREE.BufferGeometry[] = [paint(body, (p, f) => (p.y < -0.05 * b ? belly : o.spots && speckle(f, o.spots) ? c2 : c0))];
+  const fore = o.fore ?? 1;
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.05, 0.02, 0.2 * fore], r: [0, s * 0.5, s * -0.35], p: [s * 0.14 * b, -0.07 * b, 0.12] }), mix(c0, "#000000", 0.12)));
+    parts.push(paint(tf(sphere(0.5, 6, 4), { s: [0.07, 0.015, 0.16], r: [0, s * 0.35, 0], p: [s * 0.05, -0.005, -0.56] }), mix(c0, "#000000", 0.15)));
+    parts.push(paint(tf(ico(0.02 * hd, 0), { p: [s * 0.055 * b * hd, 0.045 * b, 0.42] }), EYE));
+    if (o.ears) parts.push(paint(tf(cone(0.012, 0.04, 3), { r: [-0.6, 0, 0], p: [s * 0.06 * b, 0.07 * b, 0.36] }), c0));
+    if (o.tusks) parts.push(paint(tf(cone(0.016, 0.22, 5), { r: [Math.PI - 0.25, 0, 0], p: [s * 0.035, -0.12 * b, 0.46] }), "#f2ead8"));
+  }
+  parts.push(paint(tf(ico(0.02, 0), { p: [0, 0.01 * b, 0.5] }), "#2a2622"));
+  return { geometry: merge(parts), swim: { amp: 0.045, freq: 3, mode: SwimMode.FISH } };
+}
+
+// ───────────────────────── Amazon River ─────────────────────────
+
+function piranha(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.2,
+    w: 0.075,
+    tailZ: -0.26,
+    noseZ: 0.42,
+    profile: [0.2, 0.36, 0.62, 0.86, 0.98, 1.0, 0.92, 0.66, 0.0],
+    tail: "fork",
+    tailSize: 1.05,
+    dorsal: "small",
+    anal: "small",
+    pectoral: 0.6,
+    eye: 0.03,
+    pattern: (p, f) => (p.y < -0.03 ? c[1] : p.y > 0.06 && speckle(f, 30) ? mix(c[0], "#ffffff", 0.3) : speckle(f, 12) ? c[2] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.07, freq: 7, mode: SwimMode.FISH } };
+}
+
+function discus(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.3,
+    w: 0.05,
+    tailZ: -0.3,
+    noseZ: 0.36,
+    profile: [0.32, 0.6, 0.84, 0.97, 1.0, 0.97, 0.86, 0.6, 0.0],
+    tail: "round",
+    tailSize: 0.8,
+    dorsal: "long",
+    dorsalSize: 1.05,
+    dorsalZ: 0.08,
+    anal: "long",
+    analZ: -0.02,
+    pectoral: 0.5,
+    eye: 0.03,
+    pattern: (p) => (Math.sin(p.y * 70 + p.z * 25) > 0.55 ? c[1] : null),
+    finPaint: (p, _part, base) => (Math.sin(p.z * 60) > 0.6 ? c[1] : base),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.04, freq: 5, mode: SwimMode.FISH } };
+}
+
+function angelfish(c: string[]): Built {
+  const stripes = (p: THREE.Vector3) => (Math.floor((p.z + 1) * 9) % 3 === 0 ? c[1] : null);
+  const parts = fish({
+    colors: c,
+    h: 0.18,
+    w: 0.045,
+    tailZ: -0.2,
+    noseZ: 0.36,
+    profile: [0.3, 0.55, 0.82, 0.97, 1.0, 0.95, 0.8, 0.55, 0.0],
+    tail: "lunate",
+    tailSize: 1.3,
+    dorsal: "tall",
+    dorsalSize: 2.1,
+    dorsalZ: 0.0,
+    anal: "none",
+    pectoral: 0.4,
+    eye: 0.03,
+    pattern: stripes,
+    finPaint: (p, _part, base) => stripes(p) ?? base,
+  });
+  // A tall, sweeping anal fin to match the dorsal, plus long trailing ventral threads.
+  parts.push(paint(fin([[0.12, 0], [0.02, -0.3], [-0.06, -0.42], [-0.08, -0.2], [-0.06, 0]]).translate(0, -0.12, 0), (p) => stripes(p) ?? c[0]));
+  for (const s of [-1, 1]) parts.push(paint(tube([[s * 0.02, -0.12, 0.14], [s * 0.03, -0.3, 0.1], [s * 0.04, -0.46, 0.0]], 0.006, 3), c[2]));
+  return { geometry: merge(parts), swim: { amp: 0.05, freq: 5, mode: SwimMode.FISH } };
+}
+
+function arowana(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.1,
+    w: 0.06,
+    tailZ: -0.46,
+    noseZ: 0.5,
+    profile: [0.3, 0.55, 0.78, 0.92, 1.0, 1.0, 0.96, 0.82, 0.3],
+    tail: "round",
+    tailSize: 0.9,
+    dorsal: "long",
+    dorsalZ: -0.25,
+    dorsalSize: 0.9,
+    anal: "long",
+    analZ: -0.06,
+    pectoral: 0.8,
+    eye: 0.026,
+    eyeTop: true,
+    pattern: (p, f) => (speckle(f, 35) ? mix(c[0], "#ffffff", 0.35) : p.y > 0.04 ? c[2] : null),
+  });
+  // Two chin barbels on the upturned mouth.
+  for (const s of [-1, 1]) parts.push(paint(tube([[s * 0.01, 0.04, 0.48], [s * 0.02, 0.07, 0.56], [s * 0.025, 0.08, 0.62]], 0.006, 3), c[2]));
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 4, mode: SwimMode.FISH } };
+}
+
+/** Rays: a flat disc with a whip tail. `pointed` makes bat-ray wings. */
+function ray(c: string[], o: { pointed?: boolean; spots?: boolean } = {}): Built {
+  const [c0, c1, c2] = c;
+  const parts: THREE.BufferGeometry[] = [];
+  if (o.pointed) {
+    const shape = new THREE.Shape(
+      ([[0, 0.26], [0.1, 0.22], [0.52, -0.02], [0.5, -0.08], [0.12, -0.18], [0, -0.22], [-0.12, -0.18], [-0.5, -0.08], [-0.52, -0.02], [-0.1, 0.22]] as [number, number][]).map(
+        ([x, z]) => new THREE.Vector2(x, z),
+      ),
+    );
+    const wings = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false, curveSegments: 1 });
+    wings.rotateX(Math.PI / 2);
+    wings.translate(0, 0.015, 0);
+    parts.push(paint(wings, (p) => (p.y > 0 ? c0 : c1)));
+    parts.push(paint(tf(sphere(0.5, 7, 4), { s: [0.14, 0.09, 0.2], p: [0, 0.02, 0.24] }), c0));
+  } else {
+    parts.push(
+      paint(tf(sphere(0.5, 12, 4), { s: [0.82, 0.08, 0.76], p: [0, 0, 0.04] }), (p, f) => {
+        if (p.y < 0) return c1;
+        // Orange eyespots ringed in dark on the motoro's back.
+        if (o.spots && speckle(f, 16)) return c2;
+        return speckle(f, 18, 2) ? mix(c0, "#000000", 0.15) : c0;
+      }),
+    );
+  }
+  const tail = cone(0.022, 0.42, 4);
+  tail.rotateX(-Math.PI / 2);
+  tail.translate(0, 0.01, -0.5);
+  parts.push(paint(tail, c0));
+  for (const s of [-1, 1]) parts.push(paint(tf(ico(0.02, 0), { p: [s * 0.07, 0.05, o.pointed ? 0.27 : 0.22] }), EYE));
+  return { geometry: merge(parts), swim: { amp: 0.1, freq: 2, mode: SwimMode.FLAP } };
+}
+
+function redtailCatfish(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.11,
+    w: 0.14,
+    profile: [0.25, 0.35, 0.55, 0.78, 0.92, 1, 1, 0.86, 0.48],
+    tailZ: -0.34,
+    noseZ: 0.5,
+    tail: "fork",
+    tailColor: c[2],
+    belly: c[1],
+    dorsal: "tall",
+    dorsalSize: 0.7,
+    dorsalZ: 0.12,
+    pectoral: 0.9,
+    eye: 0.02,
+    // A pale band along each side, like the real fish.
+    pattern: (p) => (p.y < 0.0 && p.y > -0.04 ? c[1] : null),
+  });
+  for (const [x, yaw, len] of [[0.07, 0.7, 0.3], [-0.07, -0.7, 0.3], [0.03, 0.35, 0.16], [-0.03, -0.35, 0.16]] as [number, number, number][]) {
+    const g = cyl(0.007, 0.003, len, 3);
+    g.translate(0, len / 2, 0);
+    g.rotateX(Math.PI / 2);
+    g.rotateY(yaw);
+    g.rotateX(0.3);
+    g.translate(x, -0.02, 0.48);
+    parts.push(paint(g, c[1]));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 4, mode: SwimMode.FISH } };
+}
+
+function mataMata(c: string[]): Built {
+  const [shell, skin, dark] = c;
+  const parts: THREE.BufferGeometry[] = [];
+  // A flat, knobbly shell with three ridges, like a pile of bark and leaves.
+  const dome = jitter(tf(new THREE.SphereGeometry(0.5, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2), { s: [0.6, 0.18, 0.72] }), 0.03, 81);
+  parts.push(paint(dome, (_p, f) => (speckle(f, 30) ? dark : speckle(f, 20, 3) ? mix(shell, skin, 0.5) : shell)));
+  for (const x of [-0.12, 0, 0.12]) parts.push(paint(tf(sphere(0.5, 5, 3), { s: [0.05, 0.05, 0.5], p: [x, 0.08, -0.02] }), dark));
+  // Long neck and a flat, triangular head with a fringed edge.
+  parts.push(paint(tube([[0, 0.0, 0.3], [0, 0.0, 0.42], [0, 0.0, 0.52]], 0.065, 6), skin));
+  const head = new THREE.Shape([[0, 0.14], [0.11, -0.05], [-0.11, -0.05]].map(([x, z]) => new THREE.Vector2(x, z)));
+  const hg = new THREE.ExtrudeGeometry(head, { depth: 0.04, bevelEnabled: false });
+  hg.rotateX(Math.PI / 2);
+  hg.translate(0, 0.02, 0.58);
+  parts.push(paint(hg, (_p, f) => (speckle(f, 25) ? dark : skin)));
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 4; i++) parts.push(paint(tf(cone(0.012, 0.05, 3), { r: [0, 0, s * 1.4], p: [s * (0.07 + i * 0.012), -0.01, 0.42 + i * 0.05] }), skin));
+    parts.push(paint(tf(ico(0.012, 0), { p: [s * 0.035, 0.03, 0.66] }), EYE));
+    parts.push(paint(tf(sphere(0.5, 5, 4), { s: [0.12, 0.05, 0.08], p: [s * 0.27, -0.04, 0.22] }), skin));
+    parts.push(paint(tf(sphere(0.5, 5, 4), { s: [0.12, 0.05, 0.08], p: [s * 0.25, -0.04, -0.26] }), skin));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.004, freq: 2, mode: SwimMode.FISH } };
+}
+
+function arapaima(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.1,
+    w: 0.085,
+    tailZ: -0.42,
+    noseZ: 0.5,
+    profile: [0.32, 0.5, 0.72, 0.9, 1.0, 1.0, 0.96, 0.82, 0.4],
+    tail: "round",
+    tailColor: c[2],
+    dorsal: "long",
+    dorsalZ: -0.24,
+    dorsalSize: 0.8,
+    dorsalColor: mix(c[0], c[2], 0.5),
+    anal: "long",
+    analZ: -0.06,
+    analColor: mix(c[0], c[2], 0.5),
+    pectoral: 0.8,
+    eye: 0.022,
+    // The scales toward the tail are edged in red ("pirarucu" means red fish).
+    pattern: (p, f) => (p.z < -0.05 && speckle(f, 45) ? c[2] : p.y < -0.04 ? c[1] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 3, mode: SwimMode.FISH } };
+}
+
+/** Otters: a long body, thick tail and short legs. `onBack` floats belly-up (sea otters). */
+function otter(c: string[], o: { onBack?: boolean; tailFlat?: boolean } = {}): Built {
+  const [c0, c1, c2] = c;
+  const body = lathe([[0.03, -0.5], [0.05, -0.38], [0.07, -0.25], [0.1, -0.14], [0.115, 0.0], [0.11, 0.12], [0.085, 0.2], [0.08, 0.26], [0.085, 0.32], [0.075, 0.38], [0.04, 0.43], [0, 0.45]], 9);
+  body.scale(1, 0.85, 1);
+  const parts: THREE.BufferGeometry[] = [paint(body, (p) => (p.y < -0.02 && p.z > 0.15 ? c1 : p.y < -0.06 ? mix(c0, c1, 0.4) : c0))];
+  if (o.tailFlat) parts.push(paint(tf(sphere(0.5, 6, 3), { s: [0.1, 0.025, 0.2], p: [0, 0, -0.52] }), c0));
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(sphere(0.5, 5, 4), { s: [0.06, 0.05, 0.09], p: [s * 0.09, -0.08, 0.16] }), c2));
+    parts.push(paint(tf(sphere(0.5, 5, 4), { s: [0.08, 0.04, 0.12], p: [s * 0.09, -0.07, -0.18] }), c2));
+    parts.push(paint(tf(ico(0.018, 0), { p: [s * 0.045, 0.045, 0.38] }), EYE));
+    parts.push(paint(tf(sphere(0.02, 4, 3), { p: [s * 0.06, 0.07, 0.31] }), c0));
+  }
+  parts.push(paint(tf(ico(0.022, 0), { p: [0, 0.015, 0.45] }), "#1e1a18"));
+  const g = merge(parts);
+  // Sea otters float on their backs with paws on the chest.
+  if (o.onBack) {
+    g.rotateZ(Math.PI);
+    const paws = merge([paint(tf(sphere(0.5, 5, 4), { s: [0.07, 0.05, 0.06], p: [0.04, 0.1, 0.22] }), c2), paint(tf(sphere(0.5, 5, 4), { s: [0.07, 0.05, 0.06], p: [-0.04, 0.1, 0.22] }), c2)]);
+    return { geometry: merge([g, paws]), swim: { amp: 0.02, freq: 2, mode: SwimMode.FISH } };
+  }
+  return { geometry: g, swim: { amp: 0.07, freq: 4, mode: SwimMode.FISH } };
+}
+
+function riverDolphin(c: string[]): Built {
+  // A bulging forehead, a long thin beak and a low ridge instead of a tall fin.
+  const body = lathe(
+    [[0.0, -0.5], [0.035, -0.44], [0.065, -0.32], [0.105, -0.14], [0.13, 0.04], [0.125, 0.18], [0.11, 0.26], [0.1, 0.3], [0.05, 0.34], [0.03, 0.42], [0.022, 0.5]],
+    8,
+  );
+  body.scale(0.9, 1, 1);
+  const parts: THREE.BufferGeometry[] = [paint(body, (p, f) => (p.y < -0.04 ? c[1] : speckle(f, 12) ? c[2] : c[0]))];
+  parts.push(paint(fin([[0.08, 0], [0.0, 0.05], [-0.12, 0.05], [-0.16, 0]]).translate(0, 0.11, -0.04), c[0]));
+  for (const s of [-1, 1]) {
+    const g = fin([[0.05, 0], [-0.03, 0.14], [-0.1, 0.15], [-0.05, 0]]);
+    g.rotateZ(-s * (Math.PI / 2 + 0.6));
+    g.translate(s * 0.09, -0.05, 0.16);
+    parts.push(paint(g, c[0]));
+    parts.push(paint(tf(ico(0.01, 0), { p: [s * 0.07, 0.03, 0.29] }), EYE));
+  }
+  parts.push(flukes(-0.47, 0.14, c[0]));
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 3.5, mode: SwimMode.FLUKE } };
+}
+
+// ───────────────────────── Kelp Forest ─────────────────────────
+
+function garibaldi(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.17,
+    w: 0.07,
+    tailZ: -0.26,
+    noseZ: 0.4,
+    profile: [0.24, 0.42, 0.68, 0.88, 0.98, 1.0, 0.9, 0.62, 0.0],
+    tail: "fork",
+    tailSize: 0.95,
+    tailColor: c[2],
+    dorsal: "long",
+    dorsalSize: 0.85,
+    dorsalColor: c[2],
+    anal: "small",
+    pectoral: 0.7,
+    eye: 0.03,
+    pattern: (p) => (p.y < -0.06 ? c[1] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 6, mode: SwimMode.FISH } };
+}
+
+function rockfish(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.14,
+    w: 0.07,
+    tailZ: -0.3,
+    noseZ: 0.44,
+    profile: [0.25, 0.38, 0.6, 0.82, 0.96, 1.0, 0.94, 0.7, 0.0],
+    tail: "round",
+    dorsal: "long",
+    dorsalSize: 1.1,
+    anal: "small",
+    pectoral: 0.9,
+    eye: 0.034,
+    pattern: (p, f) => (p.y < -0.06 ? c[1] : speckle(f, 26) ? c[2] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.07, freq: 6, mode: SwimMode.FISH } };
+}
+
+function urchin(c: string[]): Built {
+  const [c0, c1, c2] = c;
+  const body = tf(ico(0.22, 1), { s: [1, 0.7, 1], p: [0, 0.12, 0] });
+  const parts: THREE.BufferGeometry[] = [paint(body.clone(), c1)];
+  const pos = body.attributes.position as THREE.BufferAttribute;
+  const seen = new Set<string>();
+  const up = new THREE.Vector3(0, 1, 0);
+  const q = new THREE.Quaternion();
+  for (let i = 0; i < pos.count; i++) {
+    const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+    const key = v.toArray().map((x) => x.toFixed(3)).join();
+    if (seen.has(key) || v.y < 0.04) continue;
+    seen.add(key);
+    const nrm = v.clone().sub(new THREE.Vector3(0, 0.12, 0)).normalize();
+    const g = cone(0.014, 0.22, 3);
+    g.translate(0, 0.11, 0);
+    g.applyQuaternion(q.setFromUnitVectors(up, nrm));
+    g.translate(v.x, v.y, v.z);
+    parts.push(paint(g, (p) => (p.distanceTo(v) > 0.15 ? c2 : c0)));
+  }
+  body.dispose();
+  return { geometry: merge(parts), swim: { amp: 0, freq: 1, mode: SwimMode.FISH } };
+}
+
+function leopardShark(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.08,
+    w: 0.08,
+    profile: [0.2, 0.32, 0.55, 0.8, 0.95, 1, 0.95, 0.75, 0.35, 0.02],
+    tailZ: -0.36,
+    noseZ: 0.55,
+    tail: "shark",
+    tailSize: 1.0,
+    dorsal: "small",
+    dorsalSize: 1.3,
+    dorsalZ: 0.08,
+    anal: "small",
+    pectoral: 1.7,
+    belly: c[1],
+    eye: 0.016,
+    // Dark saddles and spots along the back.
+    pattern: (p, f) => (p.y > -0.01 && (Math.floor((p.z + 1) * 11) % 3 === 0 || speckle(f, 18)) ? c[2] : null),
+    finPaint: (_p, _part, base) => base,
+  });
+  return { geometry: merge(parts), swim: { amp: 0.06, freq: 4, mode: SwimMode.FISH } };
+}
+
+function seaBass(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.16,
+    w: 0.1,
+    tailZ: -0.32,
+    noseZ: 0.46,
+    profile: [0.3, 0.45, 0.68, 0.88, 0.98, 1.0, 0.95, 0.75, 0.15],
+    tail: "fan",
+    tailSize: 0.9,
+    dorsal: "long",
+    dorsalSize: 1.0,
+    anal: "small",
+    pectoral: 1.1,
+    eye: 0.026,
+    pattern: (p, f) => (speckle(f, 20) ? c[2] : p.y < -0.07 ? c[1] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.04, freq: 3, mode: SwimMode.FISH } };
+}
+
+function grayWhale(c: string[]): Built {
+  // No dorsal fin: a low hump and a row of "knuckles" instead. Mottled with barnacles.
+  const body = lathe([[0.0, -0.5], [0.02, -0.45], [0.04, -0.36], [0.075, -0.16], [0.09, 0.04], [0.088, 0.2], [0.07, 0.34], [0.045, 0.45], [0.02, 0.5]], 9);
+  body.scale(1.05, 0.95, 1);
+  const parts: THREE.BufferGeometry[] = [paint(body, (_p, f) => (speckle(f, 22) ? c[2] : speckle(f, 30, 3) ? c[1] : c[0]))];
+  for (let i = 0; i < 6; i++) parts.push(paint(tf(sphere(0.5, 4, 3), { s: [0.03, 0.02, 0.04], p: [0, 0.07 - i * 0.004, -0.12 - i * 0.05] }), c[0]));
+  for (const s of [-1, 1]) {
+    const g = fin([[0.03, 0], [-0.01, 0.08], [-0.05, 0.09], [-0.04, 0]]);
+    g.rotateZ(-s * (Math.PI / 2 + 0.6));
+    g.translate(s * 0.075, -0.04, 0.22);
+    parts.push(paint(g, c[0]));
+    parts.push(paint(tf(ico(0.008, 0), { p: [s * 0.072, 0.0, 0.36] }), EYE));
+  }
+  parts.push(flukes(-0.48, 0.13, c[0]));
+  return { geometry: merge(parts), swim: { amp: 0.025, freq: 3, mode: SwimMode.FLUKE } };
+}
+
+// ───────────────────────── Polar Waters ─────────────────────────
+
+function arcticCod(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.11,
+    w: 0.07,
+    tailZ: -0.36,
+    noseZ: 0.46,
+    profile: [0.22, 0.35, 0.58, 0.8, 0.96, 1.0, 0.94, 0.72, 0.0],
+    tail: "fork",
+    tailSize: 0.85,
+    dorsal: "small",
+    dorsalSize: 0.9,
+    anal: "long",
+    pectoral: 0.7,
+    eye: 0.032,
+    pattern: (p, f) => (p.y < -0.04 ? c[1] : speckle(f, 30) ? c[2] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.08, freq: 7, mode: SwimMode.FISH } };
+}
+
+function seaAngel(c: string[]): Built {
+  const [c0, c1, c2] = c;
+  // A see-through body with an orange gut and two flapping "wings".
+  const body = lathe([[0.0, -0.5], [0.05, -0.42], [0.09, -0.25], [0.1, -0.05], [0.09, 0.12], [0.11, 0.22], [0.1, 0.32], [0.06, 0.4], [0, 0.44]], 8);
+  const parts: THREE.BufferGeometry[] = [glow(paint(body, c0), 0.25), glow(paint(tf(sphere(0.5, 6, 4), { s: [0.1, 0.1, 0.3], p: [0, 0, -0.12] }), c1), 0.4)];
+  for (const s of [-1, 1]) {
+    const w = fin([[0.08, 0], [0.04, 0.22], [-0.06, 0.26], [-0.1, 0.12], [-0.06, 0]], 0.01);
+    w.rotateZ(-s * Math.PI / 2);
+    w.translate(s * 0.09, 0, 0.16);
+    parts.push(glow(paint(w, c2), 0.3));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.22, freq: 5, mode: SwimMode.FLAP } };
+}
+
+function krill(c: string[]): Built {
+  const [c0, c1, c2] = c;
+  // Kept light: krill come in big instanced swarms.
+  const body = lathe([[0.0, -0.5], [0.06, -0.3], [0.08, 0.0], [0.08, 0.25], [0.04, 0.44], [0, 0.5]], 5);
+  body.scale(0.9, 1, 1);
+  const parts: THREE.BufferGeometry[] = [glow(paint(body, (p) => (Math.floor((p.z + 1) * 14) % 2 ? c0 : c1)), 0.2)];
+  parts.push(paint(fin([[0.02, 0], [-0.06, 0.08], [-0.1, 0], [-0.06, -0.08]]).rotateZ(Math.PI / 2).translate(0, 0, -0.5), c0));
+  for (let i = 0; i < 3; i++) {
+    const z = 0.18 - i * 0.12;
+    parts.push(paint(tf(cone(0.012, 0.12, 3), { r: [Math.PI, 0, 0], p: [0, -0.1, z] }), c2));
+  }
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(ico(0.03, 0), { p: [s * 0.05, 0.04, 0.42] }), "#151515"));
+    parts.push(paint(tf(cone(0.006, 0.4, 3), { r: [Math.PI / 2 - 0.2, s * 0.2, 0], p: [s * 0.04, 0.06, 0.68] }), c2));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.05, freq: 9, mode: SwimMode.FISH } };
+}
+
+function penguin(c: string[]): Built {
+  const [back, belly, patch] = c;
+  // Swimming horizontally: a torpedo body, black back, white front, yellow ear patches.
+  const body = lathe([[0.0, -0.5], [0.06, -0.42], [0.12, -0.25], [0.15, -0.05], [0.145, 0.12], [0.12, 0.25], [0.1, 0.32], [0.09, 0.4], [0.05, 0.46], [0, 0.48]], 9);
+  body.scale(1, 0.9, 1);
+  const parts: THREE.BufferGeometry[] = [paint(body, (p) => (p.y < -0.01 && p.z < 0.3 ? belly : p.z > 0.28 && p.y > -0.02 && Math.abs(p.x) > 0.055 && p.z < 0.38 ? patch : back))];
+  parts.push(paint(tf(cone(0.03, 0.16, 4), { r: [Math.PI / 2, 0, 0], p: [0, -0.01, 0.54] }), (p) => (p.z > 0.56 ? "#3a3a3a" : "#e8743a")));
+  for (const s of [-1, 1]) {
+    parts.push(paint(tf(sphere(0.5, 5, 3), { s: [0.04, 0.02, 0.28], r: [0, s * 0.35, s * -0.4], p: [s * 0.16, -0.02, 0.0] }), back));
+    parts.push(paint(tf(sphere(0.5, 4, 3), { s: [0.06, 0.02, 0.08], p: [s * 0.04, -0.06, -0.5] }), "#4a4a4a"));
+    parts.push(paint(tf(ico(0.016, 0), { p: [s * 0.07, 0.03, 0.42] }), EYE));
+  }
+  return { geometry: merge(parts), swim: { amp: 0.03, freq: 5, mode: SwimMode.FISH } };
+}
+
+/** Belugas and narwhals: a rounded head, no dorsal fin, broad flippers. */
+function toothedWhale(c: string[], o: { tusk?: boolean; mottled?: boolean } = {}): Built {
+  const body = lathe([[0.0, -0.5], [0.03, -0.44], [0.06, -0.32], [0.1, -0.12], [0.12, 0.06], [0.115, 0.22], [0.105, 0.32], [0.1, 0.38], [0.075, 0.44], [0.035, 0.48], [0, 0.49]], 9);
+  body.scale(1, 0.95, 1);
+  const parts: THREE.BufferGeometry[] = [paint(body, (p, f) => (o.mottled && p.y > -0.02 && speckle(f, 40) ? c[2] : p.y < -0.04 ? c[1] : c[0]))];
+  parts.push(paint(tf(sphere(0.5, 5, 3), { s: [0.05, 0.02, 0.3], p: [0, 0.11, -0.12] }), c[0]));
+  for (const s of [-1, 1]) {
+    const g = fin([[0.04, 0], [-0.02, 0.1], [-0.08, 0.1], [-0.05, 0]]);
+    g.rotateZ(-s * (Math.PI / 2 + 0.55));
+    g.translate(s * 0.09, -0.06, 0.24);
+    parts.push(paint(g, c[0]));
+    parts.push(paint(tf(ico(0.012, 0), { p: [s * 0.075, 0.03, 0.36] }), EYE));
+  }
+  if (o.tusk) {
+    // A long spiral tooth: a slim cone with bands.
+    const t = cone(0.018, 0.75, 5);
+    t.rotateX(Math.PI / 2);
+    t.translate(0.02, 0.0, 0.48 + 0.375);
+    parts.push(paint(t, (p) => (Math.floor(p.z * 40) % 2 ? "#f2ead0" : "#d8ccb0")));
+  }
+  parts.push(flukes(-0.47, 0.13, c[0]));
+  return { geometry: merge(parts), swim: { amp: 0.045, freq: 3, mode: SwimMode.FLUKE } };
+}
+
+function greenlandShark(c: string[]): Built {
+  const parts = fish({
+    colors: c,
+    h: 0.1,
+    w: 0.1,
+    profile: [0.2, 0.32, 0.55, 0.8, 0.95, 1, 0.98, 0.85, 0.5, 0.05],
+    tailZ: -0.34,
+    noseZ: 0.52,
+    tail: "shark",
+    tailSize: 0.85,
+    dorsal: "small",
+    dorsalSize: 0.8,
+    dorsalZ: 0.0,
+    anal: "none",
+    pectoral: 1.2,
+    belly: c[1],
+    eye: 0.012,
+    pattern: (_p, f) => (speckle(f, 20) ? c[2] : null),
+  });
+  return { geometry: merge(parts), swim: { amp: 0.04, freq: 2, mode: SwimMode.FISH } };
+}
+
+function orca(c: string[]): Built {
+  const [black, white, gray] = c;
+  const body = lathe([[0.0, -0.5], [0.035, -0.44], [0.065, -0.32], [0.11, -0.12], [0.135, 0.06], [0.13, 0.2], [0.11, 0.3], [0.08, 0.38], [0.045, 0.44], [0.0, 0.47]], 9);
+  body.scale(0.92, 1, 1);
+  const paintOrca = (p: THREE.Vector3) => {
+    if (p.y < -0.04 && p.z > -0.25) return white;
+    // The white eye patch and the gray "saddle" behind the fin.
+    if (p.z > 0.26 && p.z < 0.36 && p.y > 0.0 && p.y < 0.06 && Math.abs(p.x) > 0.06) return white;
+    if (p.z < -0.05 && p.z > -0.18 && p.y > 0.08) return gray;
+    return black;
+  };
+  const parts: THREE.BufferGeometry[] = [paint(body, paintOrca)];
+  parts.push(paint(fin([[0.06, 0], [0.0, 0.22], [-0.03, 0.26], [-0.06, 0.1], [-0.09, 0]]).translate(0, 0.11, 0.0), black));
+  for (const s of [-1, 1]) {
+    const g = fin([[0.05, 0], [-0.03, 0.14], [-0.1, 0.14], [-0.05, 0]]);
+    g.rotateZ(-s * (Math.PI / 2 + 0.6));
+    g.translate(s * 0.1, -0.06, 0.22);
+    parts.push(paint(g, black));
+  }
+  parts.push(flukes(-0.47, 0.14, black));
+  return { geometry: merge(parts), swim: { amp: 0.05, freq: 3, mode: SwimMode.FLUKE } };
+}
+
 // ───────────────────────── Registry ─────────────────────────
 
 interface Entry {
@@ -1089,6 +1815,47 @@ const REGISTRY: Record<string, Entry> = {
   "vampire-squid": { length: 0.7, normalize: false, build: vampireSquid },
   "giant-squid": { length: 9, build: giantSquid },
   "sperm-whale": { length: 9, build: spermWhale },
+  "hermit-crab": { length: 0.42, build: hermitCrab },
+  "ochre-sea-star": { length: 0.45, build: (c) => seaStar(c) },
+  "shore-crab": { length: 0.4, build: (c) => crab(c, { sideways: true }) },
+  "tidepool-sculpin": { length: 0.42, build: sculpin },
+  blenny: { length: 0.5, build: blenny },
+  nudibranch: { length: 0.36, build: nudibranch },
+  "sea-hare": { length: 0.6, build: seaHare },
+  "harbor-seal": { length: 1.7, build: (c) => pinniped(c, { spots: 28 }) },
+  "giant-pacific-octopus": { length: 1.35, normalize: false, build: octopus },
+  "red-bellied-piranha": { length: 0.42, build: piranha },
+  discus: { length: 0.42, build: discus },
+  "freshwater-angelfish": { length: 0.4, build: angelfish },
+  "silver-arowana": { length: 0.95, build: arowana },
+  "motoro-stingray": { length: 0.8, build: (c) => ray(c, { spots: true }) },
+  "redtail-catfish": { length: 1.15, build: redtailCatfish },
+  "mata-mata": { length: 0.7, build: mataMata },
+  arapaima: { length: 2.2, build: arapaima },
+  "giant-otter": { length: 1.5, build: (c) => otter(c, { tailFlat: true }) },
+  "amazon-river-dolphin": { length: 2.1, build: riverDolphin },
+  garibaldi: { length: 0.5, build: garibaldi },
+  "blue-rockfish": { length: 0.5, build: rockfish },
+  "purple-sea-urchin": { length: 0.32, build: urchin },
+  "kelp-crab": { length: 0.45, build: (c) => crab(c, { reach: 0.4, claw: 0.8, tall: true }) },
+  "sunflower-sea-star": { length: 0.9, build: (c) => seaStar(c, 18, 0.42, 0.055) },
+  "bat-ray": { length: 1.6, build: (c) => ray(c, { pointed: true }) },
+  "leopard-shark": { length: 1.6, build: leopardShark },
+  "california-sea-lion": { length: 2.1, build: (c) => pinniped(c, { ears: true, fore: 1.6, head: 0.9 }) },
+  "sea-otter": { length: 1.2, build: (c) => otter(c, { onBack: true, tailFlat: true }) },
+  "giant-sea-bass": { length: 2.2, build: seaBass },
+  "gray-whale": { length: 9, build: grayWhale },
+  "arctic-cod": { length: 0.42, build: arcticCod },
+  "sea-angel": { length: 0.3, build: seaAngel },
+  "antarctic-krill": { length: 0.22, build: krill },
+  "ringed-seal": { length: 1.4, build: (c) => pinniped(c, { spots: 35 }) },
+  "emperor-penguin": { length: 1.2, build: penguin },
+  walrus: { length: 2.6, build: (c) => pinniped(c, { tusks: true, bulk: 1.35, head: 1.15, fore: 1.2 }) },
+  beluga: { length: 3.2, build: (c) => toothedWhale(c) },
+  "leopard-seal": { length: 2.8, build: (c) => pinniped(c, { spots: 22, head: 1.25, fore: 1.4 }) },
+  narwhal: { length: 3.2, build: (c) => toothedWhale(c, { tusk: true, mottled: true }) },
+  "greenland-shark": { length: 3.2, build: greenlandShark },
+  orca: { length: 7, build: orca },
 };
 
 const cache = new Map<string, ModelDef>();

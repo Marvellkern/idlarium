@@ -8,7 +8,8 @@ import { useEffect, useRef } from "react";
 import { BIOMES } from "../data/biomes";
 import { useDaylight } from "../ui/hooks";
 import { localDateKey } from "../utils/time";
-import { playAmbient, setSoundEnabled } from "../utils/audio";
+import { playAmbient, setRainSound, setSoundEnabled } from "../utils/audio";
+import { isRaining, useWeather, weatherMinute } from "./weather";
 import { useGame } from "./gameStore";
 import { useUI } from "./uiStore";
 import { pauseVisitorWindow, scheduleNextVisitor, visitorTick } from "./visitorLogic";
@@ -29,10 +30,18 @@ export function useGameLoop() {
     // Brand-new save: start the first visitor timer.
     if (!useGame.getState().visitorDueAt) scheduleNextVisitor();
     let hiddenAt = 0;
+    let weatherAt = Date.now() + 60_000;
     const iv = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       tick();
       visitorTick();
+      // Weather (Amazon showers) is rolled once a minute while the game is open.
+      const now = Date.now();
+      if (now >= weatherAt) {
+        weatherAt = now + 60_000;
+        const g = useGame.getState();
+        if (g.biomesUnlocked.some((b) => BIOMES[b].signature === "rain")) weatherMinute(now);
+      }
     }, TICK_MS);
     const onVis = () => {
       const hidden = document.visibilityState === "hidden";
@@ -59,6 +68,15 @@ export function useGameLoop() {
     setSoundEnabled(sound);
     playAmbient(biome);
   }, [sound, biome]);
+  // Rain sound only where it rains, and only while it does.
+  const rainUntil = useWeather((s) => s.rainUntil);
+  useEffect(() => {
+    const on = sound && BIOMES[biome].signature === "rain" && isRaining();
+    setRainSound(on);
+    if (!on) return;
+    const t = setTimeout(() => setRainSound(false), Math.max(0, rainUntil - Date.now()));
+    return () => clearTimeout(t);
+  }, [sound, biome, rainUntil]);
 
   // Page backdrop follows the active biome and darkens at night.
   const { daylight: lit, phase } = useDaylight();

@@ -6,7 +6,7 @@ import { DECORATION_BY_ID } from "../data/decorations";
 import type { PlacedDecoration } from "../state/types";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
-import { decoScale, decoSlots, type Dims, type Slot } from "./layout";
+import { decoScale, decoSlots, terrainHeight, type Dims, type Slot } from "./layout";
 import { getDecoModel } from "./models/decoModels";
 import { habitatCtx, sceneTime } from "./registry";
 import { createSwimMaterial, SwimMode } from "./swimShader";
@@ -27,10 +27,10 @@ export function Decorations({ biome, placed, decorating, castShadow, level, dims
   const byKey = useMemo(() => new Map(slots.map((sl) => [sl.key, sl])), [slots]);
   const scale = decoScale(biome);
 
-  // Lily pads are resting spots for frogs; hideouts shelter resting creatures.
+  // Perches (lily pads, ice floes) are resting spots for surface creatures; hideouts shelter resting ones.
   useEffect(() => {
     habitatCtx.pads = placed
-      .filter((p) => p.decoId === "lily-pads")
+      .filter((p) => DECORATION_BY_ID[p.decoId]?.perch)
       .map((p) => byKey.get(p.slot)?.pos.clone().add(new THREE.Vector3(0, 0.02, 0)))
       .filter((v): v is THREE.Vector3 => !!v);
     habitatCtx.hideouts = placed
@@ -77,7 +77,12 @@ function PlacedDeco({
     [model],
   );
   const glowMat = useMemo(
-    () => (model.glow ? new THREE.MeshBasicMaterial({ color: model.glow.color, toneMapped: false }) : null),
+    () =>
+      model.glow
+        ? model.dayGlow
+          ? new THREE.MeshBasicMaterial({ color: model.glow.color, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          : new THREE.MeshBasicMaterial({ color: model.glow.color, toneMapped: false })
+        : null,
     [model],
   );
   useEffect(() => () => (mat.dispose(), glowMat?.dispose()), [mat, glowMat]);
@@ -89,8 +94,14 @@ function PlacedDeco({
     if (spinRef.current && model.spin) spinRef.current.rotation.y += dt * model.spin;
     // Fireflies only come out after dusk (and twinkle).
     if (glowRef.current) {
-      const night = BIOMES[biome].sunlit ? habitatCtx.daylight < 0.6 : true;
-      glowRef.current.visible = night && Math.sin(sceneTime.value * 2 + phase) > -0.6;
+      if (model.dayGlow && glowMat) {
+        // Sunbeams fade with the daylight and breathe a little.
+        glowMat.opacity = 0.22 * habitatCtx.daylight * (0.8 + 0.2 * Math.sin(sceneTime.value * 0.7 + phase));
+        glowRef.current.visible = habitatCtx.daylight > 0.05;
+      } else {
+        const night = BIOMES[biome].sunlit ? habitatCtx.daylight < 0.6 : true;
+        glowRef.current.visible = night && Math.sin(sceneTime.value * 2 + phase) > -0.6;
+      }
     }
   });
   const isSurface = DECORATION_BY_ID[deco.decoId]?.placement === "surface";
@@ -130,6 +141,47 @@ function SlotMarker({ slot, filled, scale }: { slot: Slot; filled: boolean; scal
       <mesh geometry={discGeo} renderOrder={9} onClick={onClick}>
         <meshBasicMaterial color={color} transparent opacity={active ? 0.35 : 0.15} depthTest={false} />
       </mesh>
+    </group>
+  );
+}
+
+/** Fixed scenery from the habitat config (e.g. the Kelp Forest's starting kelp). Not decorations: always there. */
+export function Scenery({ biome, dims, castShadow }: { biome: BiomeId; dims: Dims; castShadow: boolean }) {
+  const b = BIOMES[biome];
+  const scale = decoScale(biome);
+  if (!b.scenery?.length) return null;
+  return (
+    <group>
+      {b.scenery.map((sc, i) => {
+        const x = (sc.x * b.dims.w) / 2;
+        const z = (sc.z * b.dims.d) / 2;
+        return (
+          <SceneryPiece
+            key={i}
+            decoId={sc.decoId}
+            position={[x, terrainHeight(biome, x, z, dims), z]}
+            rotY={sc.rotY ?? 0}
+            scale={scale * sc.scale}
+            waterH={dims.h}
+            castShadow={castShadow}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+function SceneryPiece({ decoId, position, rotY, scale, waterH, castShadow }: { decoId: string; position: [number, number, number]; rotY: number; scale: number; waterH: number; castShadow: boolean }) {
+  const model = useMemo(() => getDecoModel(decoId, waterH / scale), [decoId, waterH, scale]);
+  const mat = useMemo(() => createSwimMaterial({ mode: SwimMode.PLANT, amp: model.sway, freq: 1.5, rim: 0.15, side: THREE.DoubleSide }), [model]);
+  useEffect(() => () => mat.dispose(), [mat]);
+  const phase = position[0] * 2.3 + position[2];
+  useFrame(() => {
+    mat.userData.swim.uPhase.value = sceneTime.value + phase;
+  });
+  return (
+    <group position={position} rotation={[0, rotY, 0]} scale={scale}>
+      <mesh geometry={model.geometry} material={mat} castShadow={castShadow} receiveShadow />
     </group>
   );
 }

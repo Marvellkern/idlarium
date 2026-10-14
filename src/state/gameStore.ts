@@ -5,6 +5,7 @@ import { SPECIES_BY_ID, SIZE_SPACE, VARIANT_BY_ID } from "../data/creatures";
 import { DECORATION_BY_ID } from "../data/decorations";
 import { GOAL_BY_ID, type GoalEvent } from "../data/goals";
 import { SIZE_LEVELS } from "../data/expansion";
+import { RAIN } from "../data/signatures";
 import { clampLevel, slotLayout } from "../data/habitatGeometry";
 import { localDateKey } from "../utils/time";
 import { uid } from "../utils/id";
@@ -32,10 +33,11 @@ import {
   visitorWeights,
 } from "./economy";
 import { flushSave, throttledStorage } from "./saveStorage";
+import { isRaining } from "./weather";
 import type { DailyGoal, HabitatSave, OwnedCreature, SanctuaryEntry, SaveData } from "./types";
 
 export const SAVE_KEY = "idlarium-save";
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export type ActionResult =
   | { ok: true; uid?: string; variantId?: string; from?: number; to?: number; milestoneReward?: number }
@@ -234,11 +236,15 @@ export function migrate(persisted: unknown, version: number): unknown {
   if (version < 3) data = migrateToV3(data);
   // v3 → v4: releasing creatures. Only the Sanctuary list is new.
   if (version < 4) data = { ...(data as Record<string, unknown>), sanctuary: [], version: 4 };
+  // v4 → v5: four new habitats (Tidepool, Amazon River, Kelp Forest, Polar Waters).
+  // They start locked, which is simply "not in biomesUnlocked", so nothing else changes:
+  // every unlocked habitat, creature, decoration and egg carries over as it was.
+  if (version < 5) data = { ...(data as Record<string, unknown>), version: 5 };
   return data;
 }
 
 /** Old (v2) capacity rule per habitat: base + perLevel × capacityLevel. */
-const V2_CAPACITY: Record<BiomeId, [number, number]> = { swamp: [10, 5], reef: [14, 6], ocean: [30, 15], deep: [30, 15], polar: [30, 15] };
+const V2_CAPACITY: Partial<Record<BiomeId, [number, number]>> = { swamp: [10, 5], reef: [14, 6], ocean: [30, 15], deep: [30, 15] };
 
 /**
  * v2 → v3: physical expansion.
@@ -250,9 +256,9 @@ const V2_CAPACITY: Record<BiomeId, [number, number]> = { swamp: [10, 5], reef: [
 function migrateToV3(data: Record<string, unknown>) {
   const habitats = isObj(data.habitats) ? { ...data.habitats } : {};
   for (const [b, raw] of Object.entries(habitats)) {
-    if (!isObj(raw) || !(b in BIOMES)) continue;
+    if (!isObj(raw) || !(b in BIOMES) || !V2_CAPACITY[b as BiomeId]) continue;
     const biome = b as BiomeId;
-    const [base, per] = V2_CAPACITY[biome];
+    const [base, per] = V2_CAPACITY[biome]!;
     const oldCap = base + per * Math.max(0, Math.floor(num(raw.capacityLevel, 0)));
     const space = BIOMES[biome].expansion.space;
     let level = space.findIndex((sp) => sp >= oldCap) + 1;
@@ -345,12 +351,14 @@ function mutHabitat(s: SaveData, biome: BiomeId, fn: (h: HabitatSave) => Habitat
   return { ...s.habitats, [biome]: fn(h) };
 }
 
-/** New eggs for every habitat over `hours`; returns null if nothing was laid. */
-function layEggs(habitats: SaveData["habitats"], hours: number, now: number) {
+/** New eggs for every habitat over `hours`; returns null if nothing was laid. `live`: rain can boost them. */
+function layEggs(habitats: SaveData["habitats"], hours: number, now: number, live = false) {
   let laid = 0;
   let next: SaveData["habitats"] | null = null;
   for (const [b, h] of Object.entries(habitats) as [BiomeId, HabitatSave][]) {
-    const eggs = rollEggs(h, hours, now);
+    // Amazon showers (only while the game is open) make eggs a little more likely there.
+    const boost = live && BIOMES[b].signature === "rain" && isRaining(now) ? RAIN.eggBoost : 1;
+    const eggs = rollEggs(h, hours, now, Math.random, boost);
     if (!eggs.length) continue;
     next ??= { ...habitats };
     next[b] = { ...h, eggs: [...h.eggs, ...eggs] };
@@ -374,7 +382,7 @@ export const useGame = create<GameState>()(
           return "ok";
         }
         const earned = totalIncome(s, now) * dt;
-        const eggs = layEggs(s.habitats, dt / 3600, now);
+        const eggs = layEggs(s.habitats, dt / 3600, now, true);
         set({
           pearls: s.pearls + earned,
           lastSeen: now,

@@ -9,7 +9,16 @@ import { useAnimatedNumber } from "./hooks";
 import { PearlIcon } from "./icons";
 import { Modal } from "./Panel";
 
-const SHORT: Record<BiomeId, string> = { swamp: "swamp", reef: "reef", ocean: "ocean", deep: "deep sea", polar: "polar waters" };
+const SHORT: Record<BiomeId, string> = {
+  swamp: "swamp",
+  tidepool: "tide pool",
+  reef: "reef",
+  amazon: "river",
+  ocean: "ocean",
+  kelp: "kelp forest",
+  deep: "deep sea",
+  polar: "polar waters",
+};
 
 export function AwaySummary() {
   const away = useUI((s) => s.away);

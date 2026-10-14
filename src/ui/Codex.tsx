@@ -210,6 +210,8 @@ function SpeciesCard({ id }: { id: string }) {
     ? `A rare color morph. About 1 in 10 ${sp.name.toLowerCase()} eggs hatches a different color.`
     : sp.obtain === "shop"
       ? "Available in the shop."
+      : sp.obtain === "egg"
+        ? `Never sold and never visits: now and then one hatches from an egg laid in the ${BIOMES[sp.biome].name}.`
       : sp.baseCost !== undefined
         ? "Arrives as a visitor. Once befriended, it also appears in the shop."
         : "Only arrives as a visitor.";
@@ -248,6 +250,12 @@ function SpeciesCard({ id }: { id: string }) {
                 <dt className="text-sm font-extrabold text-ink-soft">Lives in</dt>
                 <dd className="font-semibold">{sp.habitat}</dd>
               </div>
+              {sp.pole && (
+                <div>
+                  <dt className="text-sm font-extrabold text-ink-soft">Pole</dt>
+                  <dd className="font-semibold">{sp.pole === "Both poles" ? "Both the Arctic and the Antarctic" : sp.pole}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-sm font-extrabold text-ink-soft">Activity</dt>
                 <dd className="font-semibold">{ACTIVITY_WORD[sp.activity]}</dd>

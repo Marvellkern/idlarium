@@ -21,7 +21,17 @@ type Plan =
   | "whale"
   | "squid"
   | "isopod"
-  | "angler";
+  | "angler"
+  | "crab"
+  | "hermit"
+  | "star"
+  | "slug"
+  | "seal"
+  | "ray"
+  | "otter"
+  | "penguin"
+  | "shrimp"
+  | "angel";
 
 const PLAN: Record<string, Plan> = {
   "neon-tetra": "fish",
@@ -55,6 +65,42 @@ const PLAN: Record<string, Plan> = {
   "vampire-squid": "octopus",
   "giant-squid": "squid",
   "sperm-whale": "whale",
+  "hermit-crab": "hermit",
+  "ochre-sea-star": "star",
+  "shore-crab": "crab",
+  nudibranch: "slug",
+  "sea-hare": "slug",
+  "harbor-seal": "seal",
+  "giant-pacific-octopus": "octopus",
+  "red-bellied-piranha": "tall",
+  discus: "tall",
+  "freshwater-angelfish": "tall",
+  "silver-arowana": "long",
+  "motoro-stingray": "ray",
+  "redtail-catfish": "catfish",
+  "mata-mata": "turtle",
+  arapaima: "long",
+  "giant-otter": "otter",
+  "amazon-river-dolphin": "dolphin",
+  garibaldi: "tall",
+  "purple-sea-urchin": "puffer",
+  "kelp-crab": "crab",
+  "sunflower-sea-star": "star",
+  "bat-ray": "manta",
+  "leopard-shark": "shark",
+  "california-sea-lion": "seal",
+  "sea-otter": "otter",
+  "gray-whale": "whale",
+  "sea-angel": "angel",
+  "antarctic-krill": "shrimp",
+  "ringed-seal": "seal",
+  "emperor-penguin": "penguin",
+  walrus: "seal",
+  beluga: "whale",
+  "leopard-seal": "seal",
+  narwhal: "whale",
+  "greenland-shark": "shark",
+  orca: "dolphin",
 };
 
 const EYE = "#1a1a1a";
@@ -274,6 +320,146 @@ export function CreatureGlyph({
           <circle cx="47" cy="9" r="3" fill={c2} />
           <path d="M16 24 L8 18 L10 24 L8 30Z" fill={c0} />
           <circle cx="36" cy="19" r="2" fill={eye} />
+        </>
+      );
+      break;
+    case "crab":
+      body = (
+        <>
+          {[-1, 1].map((sd) =>
+            [0, 1, 2].map((i) => (
+              <path key={`${sd}${i}`} d={`M${32 + sd * 12} ${22 + i * 2} L${32 + sd * (20 + i * 2)} ${18 + i * 3} L${32 + sd * (24 + i * 2)} ${30 + i * 2}`} stroke={c0} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+            )),
+          )}
+          <path d="M22 18 L15 11 M42 18 L49 11" stroke={c0} strokeWidth="3" strokeLinecap="round" />
+          <ellipse cx="13" cy="9" rx="5" ry="4" fill={c0} />
+          <ellipse cx="51" cy="9" rx="5" ry="4" fill={c0} />
+          <ellipse cx="32" cy="22" rx="16" ry="9" fill={c0} />
+          <path d="M18 25 Q32 32 46 25" stroke={c1} strokeWidth="2" fill="none" opacity=".7" />
+          <path d="M28 14 L28 9 M36 14 L36 9" stroke={c0} strokeWidth="1.6" />
+          <circle cx="28" cy="8.5" r="1.8" fill={eye} />
+          <circle cx="36" cy="8.5" r="1.8" fill={eye} />
+        </>
+      );
+      break;
+    case "hermit":
+      body = (
+        <>
+          <path d="M40 30 L36 36 M46 30 L46 36 M52 28 L56 34" stroke={c1} strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="25" cy="20" r="14" fill={c0} />
+          <path d="M25 20 m-8 0 a8 8 0 1 1 8 8 a5 5 0 1 1 -4 -6 a2.5 2.5 0 1 1 3 2" stroke={c2} strokeWidth="2" fill="none" />
+          <ellipse cx="43" cy="25" rx="9" ry="6" fill={c1} />
+          <ellipse cx="54" cy="23" rx="5" ry="4" fill={c1} />
+          <path d="M44 19 L45 13" stroke={c1} strokeWidth="1.6" />
+          <circle cx="45" cy="12.5" r="1.8" fill={eye} />
+        </>
+      );
+      break;
+    case "star": {
+      const pts = Array.from({ length: 10 }, (_, i) => {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const r = i % 2 ? 7.5 : 18;
+        return `${32 + Math.cos(a) * r},${21 + Math.sin(a) * r}`;
+      }).join(" ");
+      body = (
+        <>
+          <polygon points={pts} fill={c0} strokeLinejoin="round" stroke={c0} strokeWidth="2" />
+          {[0, 1, 2, 3, 4].map((i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+            return <circle key={i} cx={32 + Math.cos(a) * 9} cy={21 + Math.sin(a) * 9} r="1.6" fill={c2} />;
+          })}
+        </>
+      );
+      break;
+    }
+    case "slug":
+      body = (
+        <>
+          <path d="M4 30 Q8 22 22 22 L46 20 Q58 20 60 30 Z" fill={c0} />
+          {[14, 21, 28, 35, 42].map((x, i) => (
+            <path key={x} d={`M${x - 3} 23 L${x} ${12 + (i % 2) * 3} L${x + 3} 23Z`} fill={c2} />
+          ))}
+          <path d="M8 29 L56 29" stroke={c1} strokeWidth="2" opacity=".8" />
+          <path d="M50 21 L53 12 M54 22 L58 14" stroke={c2} strokeWidth="2.4" strokeLinecap="round" />
+        </>
+      );
+      break;
+    case "seal":
+      body = (
+        <>
+          <path d="M3 18 L10 22 L3 27Z" fill={c0} />
+          <path d="M8 22 Q20 10 42 13 Q58 15 60 21 Q57 28 32 28 Q14 28 8 22Z" fill={c0} />
+          <path d="M16 25 Q34 30 54 24 Q36 27 16 25Z" fill={c1} />
+          <path d="M36 25 L30 33 L40 27Z" fill={c0} />
+          <circle cx="52" cy="18" r="1.6" fill={eye} />
+          <circle cx="59.5" cy="20.5" r="1.2" fill={eye} />
+          {[20, 27, 34, 41].map((x) => (
+            <circle key={x} cx={x} cy={17 + (x % 3)} r="1.1" fill={c2} opacity=".7" />
+          ))}
+        </>
+      );
+      break;
+    case "ray":
+      body = (
+        <>
+          <path d="M14 21 Q6 22 1 26" stroke={c0} strokeWidth="2" fill="none" strokeLinecap="round" />
+          <ellipse cx="34" cy="20" rx="20" ry="14" fill={c0} />
+          {[[26, 14], [36, 26], [42, 13], [24, 25], [33, 19]].map(([x, y]) => (
+            <circle key={`${x}${y}`} cx={x} cy={y} r="2.2" fill={c2} />
+          ))}
+          <circle cx="46" cy="16" r="1.5" fill={eye} />
+          <circle cx="46" cy="24" r="1.5" fill={eye} />
+        </>
+      );
+      break;
+    case "otter":
+      body = (
+        <>
+          <path d="M12 23 Q4 22 1 27 Q8 28 14 26Z" fill={c0} />
+          <path d="M10 24 Q22 13 42 15 Q56 16 60 21 Q55 28 34 28 Q18 28 10 24Z" fill={c0} />
+          <path d="M44 23 Q52 27 58 22 Q52 25 44 23Z" fill={c1} />
+          <path d="M26 27 L24 33 M38 27 L40 33" stroke={c2} strokeWidth="3" strokeLinecap="round" />
+          <circle cx="50" cy="15" r="2" fill={c0} />
+          <circle cx="54" cy="18" r="1.4" fill={eye} />
+          <circle cx="60" cy="20.5" r="1.2" fill={eye} />
+        </>
+      );
+      break;
+    case "penguin":
+      body = (
+        <>
+          <path d="M6 22 Q16 12 36 13 Q50 14 56 19 Q50 27 32 28 Q14 28 6 22Z" fill={c0} />
+          <path d="M12 24 Q30 31 52 23 Q32 27 12 24Z" fill={c1} />
+          <path d="M55 18 L63 20 L55 21Z" fill="#e8743a" />
+          <ellipse cx="47" cy="17" rx="3" ry="2" fill={c2} />
+          <path d="M30 20 L22 30 L34 23Z" fill={c0} />
+          <circle cx="51" cy="16.5" r="1.3" fill={eye} />
+        </>
+      );
+      break;
+    case "shrimp":
+      body = (
+        <>
+          <path d="M8 22 Q20 12 40 16 Q52 18 56 22 Q44 26 26 26 Q14 26 8 22Z" fill={c0} />
+          {[18, 24, 30, 36, 42].map((x) => (
+            <path key={x} d={`M${x} 15 L${x} 26`} stroke={c1} strokeWidth="1.2" opacity=".7" />
+          ))}
+          {[22, 28, 34, 40].map((x) => (
+            <path key={x} d={`M${x} 26 L${x + 1} 32`} stroke={c2} strokeWidth="1.2" />
+          ))}
+          <path d="M8 22 L1 17 L3 22 L1 27Z" fill={c0} />
+          <path d="M54 20 Q60 12 63 8 M55 22 Q61 18 63 15" stroke={c2} strokeWidth="1" fill="none" />
+          <circle cx="51" cy="19" r="2" fill={eye} />
+        </>
+      );
+      break;
+    case "angel":
+      body = (
+        <>
+          <ellipse cx="32" cy="22" rx="7" ry="15" fill={c0} opacity=".85" />
+          <ellipse cx="32" cy="26" rx="3.5" ry="6" fill={c1} />
+          <path d="M26 14 Q12 6 10 14 Q14 20 26 18Z M38 14 Q52 6 54 14 Q50 20 38 18Z" fill={c2} opacity=".9" />
+          <circle cx="32" cy="9" r="4" fill={c0} />
         </>
       );
       break;
