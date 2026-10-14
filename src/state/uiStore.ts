@@ -66,7 +66,6 @@ interface UIState {
   panel: Panel;
   selectedUid: string | null;
   visitor: ActiveVisitor | null;
-  nextVisitorAt: number;
   away: AwaySummary | null;
   toasts: Toast[];
   /** Small "+X pearls" pop-ups by the pearl counter. */
@@ -91,7 +90,6 @@ interface UIState {
   togglePanel(p: Exclude<Panel, null>): void;
   select(uid: string | null): void;
   setVisitor(v: ActiveVisitor | null): void;
-  setNextVisitorAt(t: number): void;
   setAway(a: AwaySummary | null): void;
   toast(text: string, opts?: { action?: Toast["action"]; ms?: number }): number;
   floatText(text: string): void;
@@ -121,7 +119,6 @@ export const useUI = create<UIState>()((set, get) => ({
   panel: null,
   selectedUid: null,
   visitor: null,
-  nextVisitorAt: 0,
   away: null,
   toasts: [],
   floaters: [],
@@ -143,7 +140,6 @@ export const useUI = create<UIState>()((set, get) => ({
   togglePanel: (p) => set({ panel: get().panel === p ? null : p, decoSlot: null }),
   select: (selectedUid) => set({ selectedUid }),
   setVisitor: (visitor) => set({ visitor }),
-  setNextVisitorAt: (nextVisitorAt) => set({ nextVisitorAt }),
   setAway: (away) => set({ away }),
   toast: (text, opts = {}) => {
     const id = toastId++;

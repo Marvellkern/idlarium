@@ -83,6 +83,7 @@ export function defaultSave(now = Date.now()): SaveData {
     tutorial: 0,
     milestones: { firstFullExpansion: false },
     sanctuary: [],
+    visitorDueAt: 0,
   };
 }
 
@@ -207,6 +208,8 @@ export function normalizeSave(raw: unknown, now = Date.now()): SaveData {
           })
           .slice(-ECONOMY.sanctuary.maxEntries)
       : [],
+    // A due time far in the future (clock changes) is pulled back to a normal wait.
+    visitorDueAt: Math.min(Math.max(0, num(raw.visitorDueAt, 0)), now + ECONOMY.visitor.maxIntervalSec * 1000),
   };
 }
 
@@ -291,6 +294,7 @@ function pickSave(s: SaveData): SaveData {
     tutorial: s.tutorial,
     milestones: s.milestones,
     sanctuary: s.sanctuary,
+    visitorDueAt: s.visitorDueAt,
   };
 }
 
@@ -321,6 +325,7 @@ interface Actions {
   trackGoal(event: GoalEvent, key?: string): void;
   claimGoal(index: number): ActionResult;
   setTutorial(step: number): void;
+  setVisitorDue(at: number): void;
   setSetting<K extends keyof SaveData["settings"]>(key: K, value: SaveData["settings"][K]): void;
   exportSave(): string;
   importSave(json: string): ActionResult;
@@ -665,6 +670,10 @@ export const useGame = create<GameState>()(
 
       setTutorial(step) {
         set({ tutorial: step });
+      },
+
+      setVisitorDue(at) {
+        set({ visitorDueAt: at });
       },
 
       setSetting(key, value) {

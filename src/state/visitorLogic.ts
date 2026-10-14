@@ -1,5 +1,8 @@
-// Visitor flow: spawn every few minutes in the active habitat, tap within the window
-// to befriend, otherwise it's logged as "spotted". Never punishes.
+// Visitor flow: one visitor every few minutes in the active habitat, tap within the
+// window to befriend, otherwise it's logged as "spotted". Never punishes.
+// The timer runs on the real clock and is saved, so it keeps going in another tab or
+// with the game closed. When it's up, one visitor waits for you (never more), and the
+// timer only starts again once that visitor has been dealt with.
 import type { BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID, SIZE_SPACE } from "../data/creatures";
 import { spawnHints, visitorPos } from "./handoff";
@@ -15,7 +18,7 @@ const article = (word: string) => (/^[aeiou]/i.test(word) ? "An" : "A");
 
 export function scheduleNextVisitor(now = Date.now()) {
   const { minIntervalSec, maxIntervalSec } = ECONOMY.visitor;
-  useUI.getState().setNextVisitorAt(now + (minIntervalSec + Math.random() * (maxIntervalSec - minIntervalSec)) * 1000);
+  useGame.getState().setVisitorDue(now + (minIntervalSec + Math.random() * (maxIntervalSec - minIntervalSec)) * 1000);
 }
 
 /** Now and then an old friend from the Sanctuary comes back instead of a new visitor. */
@@ -45,6 +48,8 @@ export function spawnVisitor(now = Date.now(), forcedSpeciesId?: string, forceRe
     state: "swimming",
   });
   g.markSpotted(speciesId);
+  // No timer while a visitor is here; it restarts once this one is dealt with.
+  g.setVisitorDue(0);
   play("chime");
 }
 
@@ -65,8 +70,19 @@ export function visitorTick(now = Date.now()) {
     }
     return;
   }
-  if (ui.away || ui.nextVisitorAt === 0) return;
-  if (now >= ui.nextVisitorAt) spawnVisitor(now);
+  // Wait until the away summary is closed, so the visitor isn't hidden behind it.
+  const due = useGame.getState().visitorDueAt;
+  if (ui.away) return;
+  if (due === 0) scheduleNextVisitor(now); // e.g. the page was closed while a visitor was here
+  else if (now >= due) spawnVisitor(now);
+}
+
+/** The tab was hidden for `ms`: give the current visitor that time back. */
+export function pauseVisitorWindow(ms: number) {
+  const ui = useUI.getState();
+  const v = ui.visitor;
+  if (!v || v.state !== "swimming" || ms <= 0) return;
+  ui.setVisitor({ ...v, startedAt: v.startedAt + ms, expiresAt: v.expiresAt + ms });
 }
 
 function completeBefriend(v: ActiveVisitor) {

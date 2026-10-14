@@ -70,4 +70,6 @@ export interface SaveData {
   milestones: { firstFullExpansion: boolean };
   /** Released rares and legendaries, oldest first (capped; the oldest drop off). */
   sanctuary: SanctuaryEntry[];
+  /** When the next visitor shows up (real clock, keeps running while you're away). 0 = a visitor is here now. */
+  visitorDueAt: number;
 }

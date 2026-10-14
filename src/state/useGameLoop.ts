@@ -2,7 +2,7 @@
 //  - ticks pearls 4×/s from real timestamps
 //  - when the tab was hidden/closed for more than ECONOMY.awayThresholdSec,
 //    applies offline earnings (capped, half rate) and shows the away summary
-//  - runs the visitor timer
+//  - runs the visitor timer (on the real clock; it keeps going while away)
 //  - pauses rendering while hidden
 import { useEffect, useRef } from "react";
 import { BIOMES } from "../data/biomes";
@@ -11,7 +11,7 @@ import { localDateKey } from "../utils/time";
 import { playAmbient, setSoundEnabled } from "../utils/audio";
 import { useGame } from "./gameStore";
 import { useUI } from "./uiStore";
-import { scheduleNextVisitor, visitorTick } from "./visitorLogic";
+import { pauseVisitorWindow, scheduleNextVisitor, visitorTick } from "./visitorLogic";
 
 const TICK_MS = 250;
 
@@ -20,14 +20,15 @@ function tick() {
   if (useGame.getState().liveTick(now) === "away") {
     const summary = useGame.getState().applyAway(now);
     if (summary.total >= 1 || summary.passedBy || summary.eggsLaid > 0) useUI.getState().setAway(summary);
-    scheduleNextVisitor(now);
   }
 }
 
 export function useGameLoop() {
   useEffect(() => {
     tick();
-    scheduleNextVisitor();
+    // Brand-new save: start the first visitor timer.
+    if (!useGame.getState().visitorDueAt) scheduleNextVisitor();
+    let hiddenAt = 0;
     const iv = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       tick();
@@ -36,7 +37,13 @@ export function useGameLoop() {
     const onVis = () => {
       const hidden = document.visibilityState === "hidden";
       useUI.getState().setHidden(hidden);
-      if (!hidden) tick();
+      if (hidden) hiddenAt = Date.now();
+      else {
+        // A visitor on screen doesn't run out while you're in another tab.
+        if (hiddenAt) pauseVisitorWindow(Date.now() - hiddenAt);
+        hiddenAt = 0;
+        tick();
+      }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
