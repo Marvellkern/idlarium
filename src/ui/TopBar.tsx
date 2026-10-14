@@ -6,7 +6,9 @@ import { fmt, fmtRate } from "../utils/format";
 import { isHighTide, tidePhase } from "../data/signatures";
 import { useWeather } from "../state/weather";
 import { useAnimatedNumber, useDaylight, useNow, useTotalIncome } from "./hooks";
-import { GearIcon, PearlIcon, SpaceIcon } from "./icons";
+import { GearIcon, GlassIcon, PearlIcon, SpaceIcon } from "./icons";
+import { algaeLevel, isSparkling } from "../state/economy";
+import { EQUIPMENT, equipmentName } from "../data/equipment";
 
 export function TopBar() {
   const pearls = useGame((s) => s.pearls);
@@ -56,6 +58,7 @@ export function TopBar() {
           </span>
         </button>
         <SignatureStatus />
+        <TankStatus />
       </div>
 
       <button
@@ -96,4 +99,35 @@ function SignatureStatus() {
       </div>
     );
   return null;
+}
+
+/** Glass algae, the Sparkling countdown and which automations are running. */
+function TankStatus() {
+  const biome = useGame((s) => s.activeBiome);
+  const h = useGame((s) => s.habitats[s.activeBiome]);
+  const now = useNow(15_000);
+  if (!h) return null;
+  const level = algaeLevel(h, now);
+  const sparkle = isSparkling(h, now);
+  const gear = EQUIPMENT.filter((e) => h.equipment[e.slot]).map((e) => equipmentName(biome, e.slot));
+  if (level < 0.05 && !sparkle && !gear.length) return null;
+  const mins = sparkle ? Math.ceil(((h.sparklingUntil ?? 0) - now) / 60_000) : 0;
+  return (
+    <div className="flex items-center justify-center gap-2 text-xs font-extrabold text-ink-soft">
+      <span className="flex items-center gap-0.5" title={`Glass ${Math.round(level * 100)}% cloudy`}>
+        <GlassIcon size={13} level={level} />
+        <span className="tabular-nums">{Math.round(level * 100)}%</span>
+      </span>
+      {sparkle && (
+        <span className="text-amber-600 tabular-nums" title="Sparkling: +15% pearls in this habitat">
+          ✦ {mins}m
+        </span>
+      )}
+      {gear.length > 0 && (
+        <span title={gear.join(", ")} aria-label={`Running: ${gear.join(", ")}`}>
+          ⚙ {gear.length}
+        </span>
+      )}
+    </div>
+  );
 }

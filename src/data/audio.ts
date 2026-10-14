@@ -50,9 +50,11 @@ export const AMBIENT_SYNTH: Record<BiomeId, AmbientRecipe> = {
 
 export const MUSIC: string | null = null; // e.g. "/audio/lofi-loop.mp3"
 
-export const UI_SOUNDS: Record<"plink" | "pop" | "chime" | "tap", string | null> = {
+export const UI_SOUNDS: Record<"plink" | "pop" | "chime" | "tap" | "squeak", string | null> = {
   plink: null,
   pop: null,
   chime: null,
   tap: null,
+  /** Wiping the glass. */
+  squeak: null,
 };

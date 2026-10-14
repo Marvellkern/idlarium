@@ -3,8 +3,9 @@ import { create } from "zustand";
 import type { BiomeId } from "../data/biomes";
 import type { AwaySummary } from "./gameStore";
 import type { Vec3 } from "./handoff";
+import type { StyleKind } from "../data/equipment";
 
-export type Panel = "shop" | "decorate" | "codex" | "biomes" | "settings" | "goals" | "credits" | "manage" | null;
+export type Panel = "shop" | "decorate" | "codex" | "biomes" | "settings" | "goals" | "credits" | "manage" | "tank" | null;
 
 export interface ActiveVisitor {
   id: string;
@@ -73,6 +74,12 @@ interface UIState {
   makeRoom: MakeRoomFor | null;
   releaseConfirm: ReleaseConfirm | null;
   departing: Departing[];
+  /** Wipe mode: when it started (drag wipes the glass, the camera holds still). */
+  wipingSince: number | null;
+  /** Style item shown on the tank before buying it. */
+  stylePreview: { kind: StyleKind; id: string } | null;
+  /** When the glass was last wiped clean (for the sparkle burst). */
+  cleanBurstAt: number;
   feedingAt: { biome: BiomeId; at: number } | null;
   decoSlot: string | null;
   shopTab: "creatures" | "habitat";
@@ -96,6 +103,9 @@ interface UIState {
   openMakeRoom(m: MakeRoomFor | null): void;
   askRelease(c: ReleaseConfirm | null): void;
   addDeparting(d: Departing[]): void;
+  setWiping(on: boolean): void;
+  setCleanBurst(): void;
+  previewStyle(p: { kind: StyleKind; id: string } | null): void;
   removeDeparting(keys: string[]): void;
   dismissToast(id: number): void;
   startFeeding(biome: BiomeId): void;
@@ -125,6 +135,9 @@ export const useUI = create<UIState>()((set, get) => ({
   makeRoom: null,
   releaseConfirm: null,
   departing: [],
+  wipingSince: null,
+  stylePreview: null,
+  cleanBurstAt: 0,
   feedingAt: null,
   decoSlot: null,
   shopTab: "creatures",
@@ -136,8 +149,8 @@ export const useUI = create<UIState>()((set, get) => ({
   hidden: false,
   clockTick: 0,
   bumpClock: () => set({ clockTick: get().clockTick + 1 }),
-  setPanel: (panel) => set({ panel, decoSlot: null }),
-  togglePanel: (p) => set({ panel: get().panel === p ? null : p, decoSlot: null }),
+  setPanel: (panel) => set({ panel, decoSlot: null, stylePreview: null, ...(panel ? { wipingSince: null } : {}) }),
+  togglePanel: (p) => set({ panel: get().panel === p ? null : p, decoSlot: null, stylePreview: null, wipingSince: null }),
   select: (selectedUid) => set({ selectedUid }),
   setVisitor: (visitor) => set({ visitor }),
   setAway: (away) => set({ away }),
@@ -155,6 +168,9 @@ export const useUI = create<UIState>()((set, get) => ({
   openMakeRoom: (makeRoom) => set({ makeRoom }),
   askRelease: (releaseConfirm) => set({ releaseConfirm }),
   addDeparting: (d) => set({ departing: [...get().departing, ...d] }),
+  setWiping: (on) => set({ wipingSince: on ? performance.now() : null, ...(on ? { selectedUid: null, panel: null } : {}) }),
+  previewStyle: (stylePreview) => set({ stylePreview }),
+  setCleanBurst: () => set({ cleanBurstAt: performance.now() }),
   removeDeparting: (keys) => set({ departing: get().departing.filter((d) => !keys.includes(d.key)) }),
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
   startFeeding: (biome) => set({ feedingAt: { biome, at: performance.now() } }),

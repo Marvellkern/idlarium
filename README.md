@@ -15,7 +15,7 @@ npm run preview    # serve the production build locally
 
 Handy URL flags while testing (development builds only, `npm run dev`; production ignores them and doesn't even ship the code):
 
-- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, unlock every habitat, fill the habitat to capacity, fake the time of day (night shows the Polar aurora), pin the Tidepool tide (low, mid, high), start or stop Amazon rain, add pearls, spawn specific visitors or an old friend from the Sanctuary, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
+- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, unlock every habitat, fill the habitat to capacity, fake the time of day (night shows the Polar aurora), set the glass algae to 60% or 100%, pin the Tidepool tide (low, mid, high), start or stop Amazon rain, add pearls, spawn specific visitors or an old friend from the Sanctuary, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
 - `?reducedmotion` pretends the device asked for reduced motion (to test the fades instead of the growth and swim-off animations).
 - `?gallery` shows every procedural creature model; `?gallery=ocean` (or `swamp`, `tidepool`, `reef`, `amazon`, `kelp`, `deep`, `polar`) shows one habitat bigger.
 
@@ -49,6 +49,7 @@ All balancing numbers live in data files, not in components:
 | **Release refunds**, Undo time, when a confirm is needed, animation length | `ECONOMY.release` in `src/state/economy.ts` (rules in `releaseRefund()` just below it) |
 | Sanctuary size and how often old friends come back | `ECONOMY.sanctuary` in `src/state/economy.ts` |
 | Decorations: cost, happiness bonus, visitor boosts, hideouts | `src/data/decorations.ts` |
+| **Tank**: lamps, backgrounds, frames, equipment, their prices (share of the habitat's unlock cost), algae timings, Sparkling bonus, air pump / cleaner bonuses | `src/data/equipment.ts` (`TANK` holds the timings and bonuses) |
 | Daily goals: the pool, targets, reward size (minutes of income) | `src/data/goals.ts` |
 | Starting pearls, offline rate and cap, happiness rules, visitor timing, egg rates, variant chance and the chance an egg is a habitat's egg-only species (`eggs.surpriseChance`) | `ECONOMY` in `src/state/economy.ts` |
 | Audio file paths (placeholders), and the recipe for each habitat's synthesized ambience (waves, gulls, river birds, sea lion barks, ice creaks, rain) | `src/data/audio.ts` |
@@ -108,7 +109,13 @@ Visitors and eggs (which the sim ignores) speed things up a bit. Playtest and tu
 - **Refunds**: species with a shop price give back 25% of their unscaled `baseCost`, so buying and releasing always loses pearls. Visitor-only species give back a few minutes of their habitat's income (2 for uncommon, 5 for rare, 10 for legendary), never less than 25% of that biome's cheapest shop creature.
 - **Make Room**: when a visitor or an egg doesn't fit, a picker lists the habitat's creatures (lowest rarity and income first) with how much space each frees, then "Release & Welcome" or "Release & Hatch". The visitor's timer stays paused while you choose. Eggs never hatch past capacity and never disappear: they wait with a "Needs X space" badge, and the away summary mentions them.
 - **Sanctuary**: released rares and legendaries are listed in a Sanctuary tab in the codex (up to 30, oldest dropped first). Now and then one comes back as a visitor marked with a heart; befriending it brings it home and takes it off the list.
-- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding), v2 → v3 (expansion) v3 → v4 (the Sanctuary list for releases) and v4 → v5 (four new habitats, which simply start locked; nothing else changes). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
+- **Tanks**: every habitat is a glass aquarium with a frame and a clip-on lamp, and each one is kitted out separately in the **Tank** panel (bottom bar):
+  - **Lamp**: 7 lamps (clip-on, LED bar, sunset hood, moonlight, reef pendant, RGB party, antique brass). Tap the lamp on the tank (or use the panel) to switch it off for a moody tank where night creatures come out; **Auto** follows your real clock. Each tank uses one real light plus a soft beam (the beam is skipped on Low quality).
+  - **Background and frame**: 9 backgrounds stuck to the back glass (drawn procedurally, no image files) and 7 frame styles, including frameless. Tapping an item you don't own previews it on the tank before you buy.
+  - **Algae**: green film builds up on the glass over 6 real hours (offline too, worked out from timestamps). It never lowers pearls or happiness. Tap the **sponge** and drag across the glass to wipe it (the camera holds still); "Clean all" appears after 3 seconds for anyone who'd rather not drag. Cleaning when the glass is at least 50% cloudy makes the tank **Sparkling**: +15% pearls there for an hour (no stacking).
+  - **Equipment** (once per habitat): air pump (+5% happiness and a bubble curtain), hang-on filter (algae takes 10 h), auto feeder (never gets hungry, offline too), and an algae scraper bot or, in the Swamp, Tidepool and Amazon, a cleaner snail (+5% pearls; algae builds at half speed and stops at 50%, so you can still wipe for Sparkling).
+  - Prices are 3% (common) or 10% (fancy) of the habitat's unlock cost for style items and 5–15% for equipment; the Swamp and Tidepool use 1,500 as their base.
+- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding), v2 → v3 (expansion) v3 → v4 (the Sanctuary list for releases), v4 → v5 (four new habitats, which simply start locked) and v5 → v6 (tank style, equipment and algae: every tank starts with the default lamp and frame, no equipment and clean glass). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
 - **Graphics**: High adds shadows, caustics, sun shafts and Deep Sea bloom. If frame rate drops, the game first lowers pixel density, then switches to Low once (with a message).
 
 ## Swapping in real 3D models
@@ -130,7 +137,8 @@ src/
              weather (Amazon rain), game loop
   scene/     R3F diorama, lighting and day/night, creatures, schools (instanced boids),
              movement, swim shader, decorations, eggs, visitors, deep-sea bloom,
-             signature touches (tides, rain, aurora, ice floes)
+             signature touches (tides, rain, aurora, ice floes), the tank (frame, lamp,
+             background, algae and wiping, equipment props)
   ui/        top bar, bottom nav, shop, decorate, codex, habitats, goals, settings,
              onboarding, credits, modals
   utils/     number formatting, time and day/night, audio
@@ -138,4 +146,4 @@ src/
 
 ## Build status
 
-All 13 steps of the original brief are done, plus the Tank Expansion, Release and New Habitats updates: eight habitats (Freshwater Swamp, Tidepool, Coral Reef, Amazon River, Open Ocean, Kelp Forest, Deep Sea, Polar Waters) that each grow through 5 size levels, with 79 species, 18 color variants, 65 decorations plus 30 free terrain features, tides, rain, swaying kelp and an aurora, visitors, eggs, releasing and a Sanctuary, codex, day/night, daily goals, onboarding, sounds and a performance pass.
+All 13 steps of the original brief are done, plus the Tank Expansion, Release and New Habitats updates: eight habitats (Freshwater Swamp, Tidepool, Coral Reef, Amazon River, Open Ocean, Kelp Forest, Deep Sea, Polar Waters) that each grow through 5 size levels, with 79 species, 18 color variants, 65 decorations plus 30 free terrain features, tides, rain, swaying kelp and an aurora, aquarium lamps, backgrounds, frames, equipment and glass wiping, visitors, eggs, releasing and a Sanctuary, codex, day/night, daily goals, onboarding, sounds and a performance pass.

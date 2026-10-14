@@ -6,6 +6,7 @@ import { DECORATION_BY_ID } from "../data/decorations";
 import { GOAL_BY_ID, type GoalEvent } from "../data/goals";
 import { SIZE_LEVELS } from "../data/expansion";
 import { RAIN } from "../data/signatures";
+import { DEFAULT_STYLE, equipmentPrice, styleItem, stylePrice, TANK, type EquipmentSlot, type StyleKind } from "../data/equipment";
 import { clampLevel, slotLayout } from "../data/habitatGeometry";
 import { localDateKey } from "../utils/time";
 import { uid } from "../utils/id";
@@ -17,6 +18,7 @@ import {
   nextExpansion,
   spaceAt,
   codexProgress,
+  algaeLevel,
   creatureCost,
   habitatIncome,
   inShop,
@@ -37,7 +39,7 @@ import { isRaining } from "./weather";
 import type { DailyGoal, HabitatSave, OwnedCreature, SanctuaryEntry, SaveData } from "./types";
 
 export const SAVE_KEY = "idlarium-save";
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export type ActionResult =
   | { ok: true; uid?: string; variantId?: string; from?: number; to?: number; milestoneReward?: number }
@@ -83,7 +85,7 @@ export function defaultSave(now = Date.now()): SaveData {
     settings: { sound: false, music: false, quality: "high" },
     stats: { totalEarned: 0, visitorsBefriended: 0, eggsHatched: 0 },
     tutorial: 0,
-    milestones: { firstFullExpansion: false },
+    milestones: { firstFullExpansion: false, algaeTip: false },
     sanctuary: [],
     visitorDueAt: 0,
   };
@@ -135,6 +137,31 @@ export function normalizeSave(raw: unknown, now = Date.now()): SaveData {
           .filter((x) => !used.has(x.slot as string) && !!used.add(x.slot as string))
           .map((x) => ({ slot: x.slot as string, decoId: x.decoId as string, rotation: Math.floor(num(x.rotation, 0)) % 4 }));
       }
+      // Tank: style, equipment, algae. Unknown ids fall back to the defaults.
+      const st = isObj(h.style) ? h.style : {};
+      const owned = Array.isArray(h.ownedStyle)
+        ? [
+            ...new Set(
+              h.ownedStyle.filter((x): x is string => typeof x === "string" && /^(lamp|background|frame):/.test(x) && !!styleItem(x.split(":")[0] as StyleKind, x.split(":")[1])),
+            ),
+          ]
+        : [];
+      const pick = (kind: StyleKind, v: unknown, def: string) => {
+        const id = typeof v === "string" && styleItem(kind, v) ? v : def;
+        return styleItem(kind, id)!.tier === "free" || owned.includes(kind + ":" + id) ? id : def;
+      };
+      base.ownedStyle = owned;
+      base.style = {
+        lampId: pick("lamp", st.lampId, DEFAULT_STYLE.lampId),
+        lampOn: st.lampOn !== false,
+        lampAuto: st.lampAuto === true,
+        backgroundId: pick("background", st.backgroundId, DEFAULT_STYLE.backgroundId),
+        frameId: pick("frame", st.frameId, DEFAULT_STYLE.frameId),
+      };
+      const eq = isObj(h.equipment) ? h.equipment : {};
+      base.equipment = { filter: eq.filter === true, airPump: eq.airPump === true, autoFeeder: eq.autoFeeder === true, cleaner: eq.cleaner === true };
+      base.algae = { lastCleanedAt: Math.min(now, num(isObj(h.algae) ? h.algae.lastCleanedAt : undefined, now)) };
+      if (typeof h.sparklingUntil === "number" && h.sparklingUntil > now) base.sparklingUntil = Math.min(h.sparklingUntil, now + TANK.sparkleMinutes * 60_000);
       if (Array.isArray(h.eggs))
         base.eggs = h.eggs
           .filter((e): e is Record<string, unknown> => isObj(e) && typeof e.speciesId === "string" && !!SPECIES_BY_ID[e.speciesId])
@@ -199,7 +226,10 @@ export function normalizeSave(raw: unknown, now = Date.now()): SaveData {
       eggsHatched: num(stats.eggsHatched, 0),
     },
     tutorial: Math.floor(num(raw.tutorial, d.tutorial)),
-    milestones: { firstFullExpansion: isObj(raw.milestones) && raw.milestones.firstFullExpansion === true },
+    milestones: {
+      firstFullExpansion: isObj(raw.milestones) && raw.milestones.firstFullExpansion === true,
+      algaeTip: isObj(raw.milestones) && raw.milestones.algaeTip === true,
+    },
     sanctuary: Array.isArray(raw.sanctuary)
       ? raw.sanctuary
           .filter((e): e is Record<string, unknown> => isObj(e) && typeof e.speciesId === "string" && !!SPECIES_BY_ID[e.speciesId])
@@ -240,6 +270,9 @@ export function migrate(persisted: unknown, version: number): unknown {
   // They start locked, which is simply "not in biomesUnlocked", so nothing else changes:
   // every unlocked habitat, creature, decoration and egg carries over as it was.
   if (version < 5) data = { ...(data as Record<string, unknown>), version: 5 };
+  // v5 → v6: aquarium equipment, styles and glass algae. Every tank starts with the
+  // default lamp, no background, a black frame, no equipment and clean glass.
+  if (version < 6) data = migrateToV6(data as Record<string, unknown>);
   return data;
 }
 
@@ -281,6 +314,23 @@ function migrateToV3(data: Record<string, unknown>) {
     habitats[biome] = next;
   }
   return { ...data, habitats, milestones: { firstFullExpansion: false }, version: 3 };
+}
+
+function migrateToV6(data: Record<string, unknown>) {
+  const now = Date.now();
+  const habitats = isObj(data.habitats) ? { ...data.habitats } : {};
+  for (const [b, raw] of Object.entries(habitats)) {
+    if (!isObj(raw)) continue;
+    habitats[b] = {
+      ...raw,
+      style: { ...DEFAULT_STYLE, lampOn: true, lampAuto: false },
+      equipment: { filter: false, airPump: false, autoFeeder: false, cleaner: false },
+      algae: { lastCleanedAt: now },
+      ownedStyle: [],
+    };
+  }
+  const milestones = isObj(data.milestones) ? data.milestones : {};
+  return { ...data, habitats, milestones: { ...milestones, algaeTip: false }, version: 6 };
 }
 
 /** Pull just the SaveData fields out of the store state. */
@@ -331,6 +381,16 @@ interface Actions {
   trackGoal(event: GoalEvent, key?: string): void;
   claimGoal(index: number): ActionResult;
   setTutorial(step: number): void;
+  /** Buy a style item (lamp, background, frame) and put it on the tank. */
+  buyStyle(biome: BiomeId, kind: StyleKind, id: string): ActionResult;
+  /** Put an owned (or free) style item on the tank. */
+  equipStyle(biome: BiomeId, kind: StyleKind, id: string): void;
+  setLamp(biome: BiomeId, opts: { on?: boolean; auto?: boolean }): void;
+  buyEquipment(biome: BiomeId, slot: EquipmentSlot): ActionResult;
+  /** The glass is wiped clean. Cloudy enough (≥ 50%) makes the tank Sparkling. */
+  cleanGlass(biome: BiomeId): { ok: boolean; sparkled: boolean; level: number };
+  setMilestone(key: "algaeTip", on: boolean): void;
+  debugSetAlgae(biome: BiomeId, level: number): void;
   setVisitorDue(at: number): void;
   setSetting<K extends keyof SaveData["settings"]>(key: K, value: SaveData["settings"][K]): void;
   exportSave(): string;
@@ -678,6 +738,106 @@ export const useGame = create<GameState>()(
 
       setTutorial(step) {
         set({ tutorial: step });
+      },
+
+      buyStyle(biome, kind, id) {
+        const s = get();
+        const h = s.habitats[biome];
+        const item = styleItem(kind, id);
+        if (!h || !item) return { ok: false, reason: "That isn't available here." };
+        const key = kind + ":" + id;
+        if (item.tier === "free" || h.ownedStyle.includes(key)) {
+          get().equipStyle(biome, kind, id);
+          return { ok: true };
+        }
+        const cost = stylePrice(biome, kind, id);
+        if (s.pearls < cost) return { ok: false, reason: "Not enough pearls yet." };
+        const field = kind === "lamp" ? "lampId" : kind === "background" ? "backgroundId" : "frameId";
+        set({
+          pearls: s.pearls - cost,
+          habitats: mutHabitat(s, biome, (h) => ({
+            ...h,
+            ownedStyle: [...h.ownedStyle, key],
+            style: { ...h.style, [field]: id, ...(kind === "lamp" ? { lampOn: true } : {}) },
+          })),
+        });
+        return { ok: true };
+      },
+
+      equipStyle(biome, kind, id) {
+        const s = get();
+        const h = s.habitats[biome];
+        const item = styleItem(kind, id);
+        if (!h || !item || (item.tier !== "free" && !h.ownedStyle.includes(kind + ":" + id))) return;
+        const field = kind === "lamp" ? "lampId" : kind === "background" ? "backgroundId" : "frameId";
+        set({ habitats: mutHabitat(s, biome, (h) => ({ ...h, style: { ...h.style, [field]: id, ...(kind === "lamp" ? { lampOn: true } : {}) } })) });
+      },
+
+      setLamp(biome, { on, auto }) {
+        const s = get();
+        set({
+          habitats: mutHabitat(s, biome, (h) => ({
+            ...h,
+            style: { ...h.style, ...(on !== undefined ? { lampOn: on } : {}), ...(auto !== undefined ? { lampAuto: auto } : {}) },
+          })),
+        });
+      },
+
+      buyEquipment(biome, slot) {
+        const s = get();
+        const h = s.habitats[biome];
+        if (!h) return { ok: false, reason: "Locked habitat." };
+        if (h.equipment[slot]) return { ok: false, reason: "Already installed." };
+        const cost = equipmentPrice(biome, slot);
+        if (s.pearls < cost) return { ok: false, reason: "Not enough pearls yet." };
+        const now = Date.now();
+        set({
+          pearls: s.pearls - cost,
+          habitats: mutHabitat(s, biome, (h) => {
+            // Keep the glass looking the same when the build-up rate changes.
+            const level = algaeLevel(h, now);
+            const equipment = { ...h.equipment, [slot]: true };
+            const hours = equipment.filter ? TANK.algaeHoursWithFilter : TANK.algaeHours;
+            const rate = equipment.cleaner ? TANK.cleanerRate : 1;
+            const kept = Math.min(level, equipment.cleaner ? TANK.cleanerCap : 1);
+            return { ...h, equipment, algae: { lastCleanedAt: now - (kept / rate) * hours * 3600_000 } };
+          }),
+        });
+        return { ok: true };
+      },
+
+      cleanGlass(biome) {
+        const s = get();
+        const h = s.habitats[biome];
+        if (!h) return { ok: false, sparkled: false, level: 0 };
+        const now = Date.now();
+        const level = algaeLevel(h, now);
+        const sparkled = level >= TANK.sparkleFrom;
+        set({
+          habitats: mutHabitat(s, biome, (h) => ({
+            ...h,
+            algae: { lastCleanedAt: now },
+            // Doesn't stack: a qualifying clean just restarts the timer.
+            ...(sparkled ? { sparklingUntil: now + TANK.sparkleMinutes * 60_000 } : {}),
+          })),
+        });
+        get().trackGoal("wipe");
+        return { ok: true, sparkled, level };
+      },
+
+      setMilestone(key, on) {
+        set({ milestones: { ...get().milestones, [key]: on } });
+      },
+
+      debugSetAlgae(biome, level) {
+        const s = get();
+        set({
+          habitats: mutHabitat(s, biome, (h) => {
+            const hours = h.equipment.filter ? TANK.algaeHoursWithFilter : TANK.algaeHours;
+            const rate = h.equipment.cleaner ? TANK.cleanerRate : 1;
+            return { ...h, algae: { lastCleanedAt: Date.now() - (level / rate) * hours * 3600_000 } };
+          }),
+        });
       },
 
       setVisitorDue(at) {

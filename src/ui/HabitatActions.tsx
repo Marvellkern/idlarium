@@ -6,7 +6,11 @@ import { play } from "../utils/audio";
 import { useHabitatStats } from "./hooks";
 import { hatchEgg } from "../state/eggLogic";
 import { SPECIES_BY_ID } from "../data/creatures";
-import { EggIcon, FoodIcon } from "./icons";
+import { EggIcon, FoodIcon, SpongeIcon } from "./icons";
+import { algaeLevel } from "../state/economy";
+import { TANK } from "../data/equipment";
+import { toggleWipe } from "../state/tankLogic";
+import { useNow } from "./hooks";
 
 export function moodWord(v: number) {
   if (v >= 1.3) return "Thriving";
@@ -25,7 +29,10 @@ export function HabitatActions() {
   const panel = useUI((s) => s.panel);
   const h = useGame((s) => s.habitats[s.activeBiome]);
   const eggs = h?.eggs;
+  const wiping = useUI((s) => s.wipingSince !== null);
+  const now = useNow(5000);
   if (!stats || panel) return null;
+  const algae = h ? algaeLevel(h, now) : 0;
   // Hatch the first egg that fits; if none fit, the first one opens Make Room.
   const ready = eggs ? eggs.findIndex((e) => spaceShort(biome, h, e.speciesId) === 0) : -1;
   const short = eggs?.length && ready < 0 ? spaceShort(biome, h, eggs[0].speciesId) : 0;
@@ -49,6 +56,29 @@ export function HabitatActions() {
 
   return (
     <div className="pointer-events-none fixed right-3 bottom-[calc(96px+env(safe-area-inset-bottom))] z-10 flex flex-col items-end gap-2 md:bottom-[110px]">
+      {(algae >= TANK.spongeFrom || wiping) && (
+        <button
+          type="button"
+          onClick={toggleWipe}
+          id="sponge-button"
+          aria-pressed={wiping}
+          title="Wipe the glass: tap, then drag across the tank"
+          aria-label={wiping ? "Stop wiping the glass" : `Wipe the glass. It's ${Math.round(algae * 100)}% cloudy`}
+          className={`glass pointer-events-auto flex min-h-[52px] items-center gap-2 py-1.5 pr-4 pl-2 ${wiping ? "ring-3 ring-ink" : algae >= TANK.sparkleFrom ? "animate-shimmer" : ""}`}
+        >
+          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-white/70">
+            <svg className="absolute inset-0" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="17" fill="none" stroke="rgb(0 0 0 / 0.08)" strokeWidth="3.5" />
+              <circle cx="20" cy="20" r="17" fill="none" stroke="#7fa84a" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${Math.max(0.02, algae) * 106.8} 106.8`} transform="rotate(-90 20 20)" />
+            </svg>
+            <SpongeIcon size={19} />
+          </span>
+          <span className="text-left leading-tight">
+            <span className="block text-[15px] font-extrabold">{wiping ? "Done" : "Wipe"}</span>
+            <span className="block text-sm font-bold text-ink-soft tabular-nums">{Math.round(algae * 100)}% cloudy</span>
+          </span>
+        </button>
+      )}
       {eggs && eggs.length > 0 && (
         <button
           type="button"

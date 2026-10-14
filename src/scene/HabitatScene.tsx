@@ -22,6 +22,7 @@ import { Feeding } from "./Feeding";
 import { creaturePositions, expansionCtx } from "./registry";
 import { sceneLookup } from "../state/handoff";
 import { Signature } from "./Signatures";
+import { Tank } from "./Tank";
 import { TerrainFeatures } from "./TerrainFeatures";
 import { Visitor } from "./Visitor";
 
@@ -106,6 +107,7 @@ export function HabitatScene({ biome }: { biome: BiomeId }) {
       <TerrainFeatures biome={biome} level={level} dims={dims} growingTo={expansion ? expansion.to : null} />
       <Scenery biome={biome} dims={dims} castShadow={high && !isTouchDevice()} />
       <Signature biome={biome} dims={dims} high={high} />
+      <Tank biome={biome} dims={dims} high={high} />
       {habitat && (
         // Phones skip decoration shadows: it halves the shadow-pass draw calls in a full Lv5 habitat.
         <Decorations biome={biome} placed={habitat.decorations} decorating={decorating} castShadow={high && !isTouchDevice()} level={simLevel} dims={dims} />

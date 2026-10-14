@@ -1,6 +1,6 @@
 import { BIOMES } from "../data/biomes";
 import { canBreed, RARITY_LABEL, SIZE_SPACE, speciesForBiome, type Species } from "../data/creatures";
-import { capacityOf, creatureCost, ECONOMY, inShop, ownedCount, spaceUsed } from "../state/economy";
+import { capacityOf, creatureCost, ECONOMY, inShop, isSparkling, ownedCount, spaceUsed } from "../state/economy";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
@@ -149,7 +149,11 @@ function HabitatTab() {
             Decorations: +{hp.deco.toFixed(2)} (up to +{ECONOMY.happiness.decoMax.toFixed(2)}, each kind counts once)
           </li>
           <li>Recently fed: {hp.fed > 0 ? `+${hp.fed.toFixed(2)}` : "feed for a small boost"}</li>
+          {hp.gear > 0 && <li>Air pump: +{hp.gear.toFixed(2)}</li>}
+          {hp.autoFed && <li>Auto feeder: never gets hungry</li>}
           {hp.neglect > 0 && <li>Peckish: −{hp.neglect.toFixed(2)} (a quick feed fixes it)</li>}
+          {h.equipment.cleaner && <li>Algae cleaner: +5% pearls</li>}
+          {isSparkling(h, Date.now()) && <li>Sparkling glass: +15% pearls for now</li>}
         </ul>
         <p className="mt-2 text-sm font-semibold text-ink-soft">
           This habitat makes <b className="text-ink">{fmtRate(stats.income)}/s</b>.

@@ -8,7 +8,7 @@ import { BIOMES, type BiomeId } from "../data/biomes";
 import { daylight } from "../utils/time";
 import type { Dims } from "../data/habitatGeometry";
 import { mix } from "./models/geo";
-import { habitatCtx, sceneTime } from "./registry";
+import { habitatCtx, sceneTime, tankCtx } from "./registry";
 import { AURORA, RAIN } from "../data/signatures";
 
 interface LightSet {
@@ -70,6 +70,7 @@ export function Atmosphere({ biome, shadows, dims }: { biome: BiomeId; shadows: 
   );
   // Start at the right brightness instead of fading in from noon.
   const lit = useRef(b.sunlit ? daylight() : 0);
+  const lampK = useRef(1);
   useEffect(() => {
     lit.current = b.sunlit ? daylight() : 0;
     habitatCtx.daylight = lit.current;
@@ -85,14 +86,18 @@ export function Atmosphere({ biome, shadows, dims }: { biome: BiomeId; shadows: 
     const t = b.sunlit ? k : 1;
     // Amazon showers soften the light a little.
     const rainDim = 1 - (1 - RAIN.lightDim) * habitatCtx.rain;
+    // The tank lamp: its color tints the light a little; switched off, the tank gets moody.
+    lampK.current += ((tankCtx.lampOn ? 1 : 0) - lampK.current) * (1 - Math.exp(-Math.min(dt, 0.1) * 4));
+    const lampDim = THREE.MathUtils.lerp(0.38, 1, lampK.current);
     if (sun.current) {
       sun.current.color.lerpColors(c.nightSun, c.daySun, t);
-      sun.current.intensity = THREE.MathUtils.lerp(NIGHT.sunI, day.sunI, t) * rainDim;
+      if (tankCtx.lampTint > 0) sun.current.color.lerp(tankCtx.lampColor, tankCtx.lampTint);
+      sun.current.intensity = THREE.MathUtils.lerp(NIGHT.sunI, day.sunI, t) * rainDim * lampDim;
     }
     if (hemi.current) {
       hemi.current.color.lerpColors(c.nightSky, c.daySky, t);
       hemi.current.groundColor.lerpColors(c.nightGround, c.dayGround, t);
-      hemi.current.intensity = THREE.MathUtils.lerp(NIGHT.hemiI, day.hemiI, t);
+      hemi.current.intensity = THREE.MathUtils.lerp(NIGHT.hemiI, day.hemiI, t) * THREE.MathUtils.lerp(0.62, 1, lampK.current);
       // The aurora's light tints the water faintly.
       if (habitatCtx.aurora > 0) hemi.current.color.lerp(c.aurora, AURORA.tint * habitatCtx.aurora);
     }

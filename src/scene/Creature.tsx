@@ -11,7 +11,7 @@ import { play } from "../utils/audio";
 import { fadeBox, swimBounds, terrainHeight, type Dims } from "./layout";
 import { getCreatureModel } from "./models/creatureModels";
 import { createAgent, faceVelocity, resizeAgent, ROLL_SECONDS, startle, updateAgent } from "./movement";
-import { agents, creatureLengths, creaturePositions, habitatCtx, pairBook } from "./registry";
+import { agents, creatureLengths, creaturePositions, habitatCtx, pairBook, tankCtx } from "./registry";
 import { OTTERS } from "../data/signatures";
 import { hashStr } from "./models/geo";
 import { createSwimMaterial, setEdgeFade } from "./swimShader";
@@ -35,7 +35,8 @@ const shiftColor = new THREE.Color();
 /** Nocturnal species rest by day, day species rest at night. Never in the sunless deep. */
 export function isResting(sp: Species | undefined, biome: BiomeId, daylight: number) {
   if (!sp || !BIOMES[biome].sunlit) return false;
-  if (sp.activity === "night") return daylight > 0.55;
+  // With the tank lamp off, night owls come out even by day.
+  if (sp.activity === "night") return daylight > 0.55 && tankCtx.lampOn;
   if (sp.activity === "day") return daylight < 0.35;
   return false;
 }

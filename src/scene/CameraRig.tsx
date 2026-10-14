@@ -44,6 +44,8 @@ function applyLimits(c: OrbitControlsImpl | null, mode: "normal" | "decorate" | 
 /** `dims` is the size to frame: the current habitat, or the next size while previewing an expansion. */
 export function CameraRig({ biome, decorating, dims }: { biome: BiomeId; decorating: boolean; dims: Dims }) {
   const controls = useRef<OrbitControlsImpl>(null);
+  // Wipe mode: dragging wipes the glass, so the camera holds still.
+  const wiping = useUI((s) => s.wipingSince !== null);
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const cfg = BIOMES[biome];
   const home = useMemo(() => new THREE.Vector3(0, dims.h * 0.4, 0), [dims.h]);
@@ -174,6 +176,7 @@ export function CameraRig({ biome, decorating, dims }: { biome: BiomeId; decorat
     <OrbitControls
       ref={controls}
       makeDefault
+      enabled={!wiping}
       enablePan={false}
       enableDamping
       dampingFactor={0.08}

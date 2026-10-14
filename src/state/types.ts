@@ -19,6 +19,24 @@ export interface Egg {
   laidAt: number;
 }
 
+/** Cosmetic tank style (ids in data/equipment.ts). */
+export interface TankStyle {
+  lampId: string;
+  lampOn: boolean;
+  /** Lamp follows the real clock: on by day, off at night. */
+  lampAuto: boolean;
+  backgroundId: string;
+  frameId: string;
+}
+
+/** Functional equipment, bought once per habitat. */
+export interface TankEquipment {
+  filter: boolean;
+  airPump: boolean;
+  autoFeeder: boolean;
+  cleaner: boolean;
+}
+
 export interface HabitatSave {
   /** Physical size level, 1–5. */
   sizeLevel: number;
@@ -28,6 +46,14 @@ export interface HabitatSave {
   creatures: OwnedCreature[];
   decorations: PlacedDecoration[];
   eggs: Egg[];
+  style: TankStyle;
+  equipment: TankEquipment;
+  /** Algae is computed from this (and the filter/cleaner), never ticked. */
+  algae: { lastCleanedAt: number };
+  /** +15% income in this habitat until then (from wiping cloudy glass). */
+  sparklingUntil?: number;
+  /** Bought style items, as "lamp:sunset", "background:coral", "frame:gold". Free items are always owned. */
+  ownedStyle: string[];
 }
 
 /** A rare or legendary creature that was released. It may come back as a visitor. */
@@ -67,7 +93,7 @@ export interface SaveData {
   stats: { totalEarned: number; visitorsBefriended: number; eggsHatched: number };
   /** First-time tips: index of the next step, or -1 when finished or skipped. */
   tutorial: number;
-  milestones: { firstFullExpansion: boolean };
+  milestones: { firstFullExpansion: boolean; /** The "wipe the glass" tip was shown. */ algaeTip: boolean };
   /** Released rares and legendaries, oldest first (capped; the oldest drop off). */
   sanctuary: SanctuaryEntry[];
   /** When the next visitor shows up (real clock, keeps running while you're away). 0 = a visitor is here now. */

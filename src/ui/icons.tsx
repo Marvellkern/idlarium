@@ -125,3 +125,38 @@ export const SpaceIcon = ({ size, ...p }: P) => (
     <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" />
   </svg>
 );
+
+export const TankIcon = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <rect x="3" y="8" width="18" height="12" rx="1.5" />
+    <path d="M3 12c3-1.5 6 1.5 9 0s6-1.5 9 0" />
+    <path d="M15 8V5h4v3" />
+  </svg>
+);
+
+export const SpongeIcon = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <rect x="4" y="8" width="16" height="10" rx="3" />
+    <path d="M8 12h.01M12 14h.01M16 12h.01M10 16h.01M14 10h.01" />
+    <path d="M7 5c1-1 2-1 3 0M14 4c1-1 2-1 3 0" />
+  </svg>
+);
+
+export const BulbIcon = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M9 18h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z" />
+  </svg>
+);
+
+/** A small pane of glass that fills up green with algae (0–1). */
+export function GlassIcon({ size = 16, level = 0, ...p }: P & { level?: number }) {
+  const h = Math.round(12 * Math.min(1, Math.max(0, level)));
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden {...p}>
+      <rect x="2.5" y="1.5" width="11" height="13" rx="1.5" fill="rgb(255 255 255 / 0.6)" stroke="currentColor" strokeWidth="1.4" />
+      {h > 0 && <rect x="3.5" y={14 - h - 0.5} width="9" height={h} rx="1" fill="#7fa84a" opacity=".85" />}
+      <path d="M5 4.5l2-2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}

@@ -1,6 +1,7 @@
 import { BIOMES, type BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID } from "../data/creatures";
-import { ECONOMY, spaceShort } from "../state/economy";
+import { algaeLevel, ECONOMY, spaceShort } from "../state/economy";
+import { TANK } from "../data/equipment";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
@@ -24,6 +25,8 @@ export function AwaySummary() {
   const away = useUI((s) => s.away);
   const shown = useAnimatedNumber(away ? away.total : 0);
   // Eggs never hatch into a full habitat: they wait.
+  // Cloudy glass is only ever an opportunity: wiping gives a bonus.
+  const cloudy = useGame((s) => Object.values(s.habitats).some((h) => h && algaeLevel(h, Date.now()) >= TANK.sparkleFrom));
   const eggWaiting = useGame((s) =>
     (Object.entries(s.habitats) as [BiomeId, NonNullable<(typeof s.habitats)[BiomeId]>][]).some(([b, h]) => h.eggs.some((e) => spaceShort(b, h, e.speciesId) > 0)),
   );
@@ -54,6 +57,7 @@ export function AwaySummary() {
             {away.eggsLaid === 1 ? "An egg was laid" : `${away.eggsLaid} eggs were laid`}. Tap them in the habitat to hatch.
           </p>
         )}
+        {cloudy && <p className="font-bold">Your tanks got a bit cloudy. Give them a wipe for a bonus!</p>}
         {eggWaiting && <p className="text-sm font-semibold text-ink-soft">An egg is waiting for space. Make room whenever you like, it'll wait.</p>}
         {passer && (
           <p className="rounded-xl bg-white/70 px-3 py-2 font-bold">

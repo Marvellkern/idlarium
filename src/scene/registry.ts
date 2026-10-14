@@ -46,3 +46,17 @@ export const agents = new Map<string, Agent>();
 
 /** Species that pair up (sea otters): uids in the order they arrived, paired 1–2, 3–4, … */
 export const pairBook = new Map<string, string[]>();
+
+/**
+ * The tank as currently drawn (it animates while a habitat grows), written by the
+ * diorama every frame, plus the lamp state that lighting and creatures react to.
+ */
+export const tankCtx = {
+  w: 1,
+  h: 1,
+  d: 1,
+  soil: 0,
+  lampOn: true,
+  lampColor: new THREE.Color("#ffffff"),
+  lampTint: 0,
+};

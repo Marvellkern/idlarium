@@ -94,6 +94,12 @@ export default function DebugPanel() {
           Toggle rain
         </button>
       )}
+      <button className={btn} onClick={() => g().debugSetAlgae(biome, 0.6)}>
+        Algae 60%
+      </button>
+      <button className={btn} onClick={() => g().debugSetAlgae(biome, 1)}>
+        Algae 100%
+      </button>
       <button className={btn} onClick={() => g().debugAddPearls(1000)}>+1K pearls</button>
       <button className={btn} onClick={() => g().debugAddPearls(100000)}>+100K pearls</button>
       <button className={btn} onClick={() => g().debugAddPearls(1e9)}>+1B pearls</button>

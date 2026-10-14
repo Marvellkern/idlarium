@@ -71,6 +71,12 @@ export function play(name: UiSound) {
     case "tap":
       tone(660, 0.06, "sine", 0.04);
       break;
+    case "squeak": {
+      // A soft rubbery squeak on glass.
+      const f = 1500 + Math.random() * 500;
+      tone(f, 0.07, "triangle", 0.012, 0, f * 1.25);
+      break;
+    }
   }
 }
 

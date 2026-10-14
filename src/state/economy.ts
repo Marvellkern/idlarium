@@ -17,6 +17,7 @@ import { GOAL_REWARD_FLOOR, GOALS, GOALS_PER_DAY, type GoalContext } from "../da
 import { SIZE_LEVELS, TERRAIN_FEATURES } from "../data/expansion";
 import { clampLevel, newSlotsAt } from "../data/habitatGeometry";
 import { DECORATION_BY_ID } from "../data/decorations";
+import { DEFAULT_STYLE, TANK } from "../data/equipment";
 import { isHighTide, TIDES } from "../data/signatures";
 import type { DailyGoal, Egg, HabitatSave, SaveData } from "./types";
 
@@ -94,7 +95,39 @@ export const ECONOMY = {
 const HOUR = 3600_000;
 
 export function newHabitat(now: number): HabitatSave {
-  return { sizeLevel: 1, lastFed: now, creatures: [], decorations: [], eggs: [] };
+  return {
+    sizeLevel: 1,
+    lastFed: now,
+    creatures: [],
+    decorations: [],
+    eggs: [],
+    style: { ...DEFAULT_STYLE, lampOn: true, lampAuto: false },
+    equipment: { filter: false, airPump: false, autoFeeder: false, cleaner: false },
+    algae: { lastCleanedAt: now },
+    ownedStyle: [],
+  };
+}
+
+// ───────────── Tank: algae, equipment, Sparkling ─────────────
+
+/**
+ * Algae on the glass, 0–1, from the time since the last clean. A filter slows it,
+ * a scraper/snail slows it more and caps it. Purely visual: it never lowers income.
+ */
+export function algaeLevel(h: Pick<HabitatSave, "algae" | "equipment">, now: number) {
+  const e = h.equipment;
+  const hours = e.filter ? TANK.algaeHoursWithFilter : TANK.algaeHours;
+  const level = (Math.max(0, now - h.algae.lastCleanedAt) / (hours * HOUR)) * (e.cleaner ? TANK.cleanerRate : 1);
+  return Math.min(e.cleaner ? TANK.cleanerCap : 1, level);
+}
+
+export function isSparkling(h: Pick<HabitatSave, "sparklingUntil">, now: number) {
+  return (h.sparklingUntil ?? 0) > now;
+}
+
+/** Income bonus from the tank (cleaner +5%, Sparkling +15%), added together. Never below 1. */
+export function tankIncomeMultiplier(h: HabitatSave, now: number, sparkle = true) {
+  return 1 + (h.equipment.cleaner ? TANK.cleanerIncome : 0) + (sparkle && isSparkling(h, now) ? TANK.sparkleIncome : 0);
 }
 
 export function ownedCount(h: HabitatSave | undefined, speciesId: string) {
@@ -173,6 +206,10 @@ export interface HappinessBreakdown {
   deco: number;
   fed: number;
   neglect: number;
+  /** From the air pump. */
+  gear: number;
+  /** An auto feeder means it never gets hungry. */
+  autoFed: boolean;
 }
 
 export function happiness(h: HabitatSave, now: number): HappinessBreakdown {
@@ -180,9 +217,12 @@ export function happiness(h: HabitatSave, now: number): HappinessBreakdown {
   const hoursSinceFed = Math.max(0, (now - h.lastFed) / HOUR);
   const deco = decoHappiness(h);
   const fed = hoursSinceFed < cfg.fedBonusHours ? cfg.fedBonus : 0;
-  const neglect = Math.max(0, hoursSinceFed - cfg.neglectAfterHours) * cfg.neglectPerHour;
-  const value = Math.min(cfg.max, Math.max(cfg.min, cfg.base + deco + fed - neglect));
-  return { value, deco, fed, neglect };
+  const autoFed = h.equipment.autoFeeder;
+  // The auto feeder feeds whenever it's needed (offline too), so hunger never sets in.
+  const neglect = autoFed ? 0 : Math.max(0, hoursSinceFed - cfg.neglectAfterHours) * cfg.neglectPerHour;
+  const gear = h.equipment.airPump ? TANK.airPumpHappiness : 0;
+  const value = Math.min(cfg.max, Math.max(cfg.min, cfg.base + deco + fed + gear - neglect));
+  return { value, deco, fed, neglect, gear, autoFed };
 }
 
 export function habitatBaseIncome(h: HabitatSave | undefined) {
@@ -192,9 +232,9 @@ export function habitatBaseIncome(h: HabitatSave | undefined) {
   return sum;
 }
 
-export function habitatIncome(h: HabitatSave | undefined, now: number) {
+export function habitatIncome(h: HabitatSave | undefined, now: number, sparkle = true) {
   if (!h) return 0;
-  return habitatBaseIncome(h) * happiness(h, now).value;
+  return habitatBaseIncome(h) * happiness(h, now).value * tankIncomeMultiplier(h, now, sparkle);
 }
 
 export function totalIncome(save: Pick<SaveData, "habitats">, now: number) {
@@ -225,8 +265,13 @@ export function offlineEarnings(save: Pick<SaveData, "habitats">, from: number, 
   const mid = from + (seconds * 1000) / 2;
   const perBiome: Partial<Record<BiomeId, number>> = {};
   let total = 0;
+  const end = from + seconds * 1000;
   for (const [id, h] of Object.entries(save.habitats) as [BiomeId, HabitatSave][]) {
-    const earned = habitatIncome(h, mid) * seconds * ECONOMY.offlineRate;
+    // Sparkling only counts for the part of the time away it actually lasted.
+    const sparkleSeconds = Math.max(0, Math.min(end, h.sparklingUntil ?? 0) - from) / 1000;
+    const base = habitatIncome(h, mid, false);
+    const sparkle = habitatBaseIncome(h) * happiness(h, mid).value * TANK.sparkleIncome * sparkleSeconds;
+    const earned = (base * seconds + sparkle) * ECONOMY.offlineRate;
     if (earned > 0) {
       perBiome[id] = earned;
       total += earned;

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { BIOMES, type BiomeId } from "../data/biomes";
 import { habitatDims, lerpDims, terrainHeight, type Dims } from "../data/habitatGeometry";
 import { mix, paint, rng } from "./models/geo";
-import { expansionCtx, habitatCtx, sceneTime } from "./registry";
+import { expansionCtx, habitatCtx, sceneTime, tankCtx } from "./registry";
 import { createSwimMaterial, SwimMode } from "./swimShader";
 
 const causticUniforms = { uTime: sceneTime, uCaustic: { value: 0.5 }, uCausticColor: { value: new THREE.Color("#ffffff") } };
@@ -199,6 +199,10 @@ export function Diorama({ biome, quality, level, fromLevel, preview }: Props) {
     const t = fromDims ? expansionCtx.t : 1;
     const cur = fromDims ? lerpDims(fromDims, dims, easeOut(t)) : dims;
     shown.current = cur;
+    tankCtx.w = cur.w;
+    tankCtx.h = cur.h;
+    tankCtx.d = cur.d;
+    tankCtx.soil = floorless ? 0 : cur.soil;
     grow.uRise.value = fromDims ? easeOut((t - 0.3) / 0.55) : 1;
     if (fromDims) {
       grow.uOld.value.set(fromDims.w / 2, fromDims.d / 2);

@@ -12,6 +12,8 @@ import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { ExpansionOverlay } from "./ui/ExpansionOverlay";
 import { HabitatActions } from "./ui/HabitatActions";
 import { Manage } from "./ui/Manage";
+import { TankPanel } from "./ui/TankPanel";
+import { WipeOverlay } from "./ui/WipeOverlay";
 import { MakeRoomPicker, PearlFloaters, ReleaseConfirmDialog } from "./ui/ReleaseUI";
 import { Onboarding } from "./ui/Onboarding";
 import { EmptyState, SelectedInfo, Toasts } from "./ui/Overlays";
@@ -48,7 +50,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const ui = useUI.getState();
-      if (ui.releaseConfirm) ui.askRelease(null);
+      if (ui.wipingSince !== null) ui.setWiping(false);
+      else if (ui.releaseConfirm) ui.askRelease(null);
       else if (ui.makeRoom) ui.openMakeRoom(null);
       else if (ui.codexCard) ui.setCodexCard(null);
       else if (ui.panel) ui.setPanel(null);
@@ -85,12 +88,14 @@ export default function App() {
           {panel === "goals" && <GoalsPanel />}
           {panel === "credits" && <Credits />}
           {panel === "manage" && <Manage />}
+          {panel === "tank" && <TankPanel />}
         </ErrorBoundary>
         <BottomNav />
         <AwaySummary />
         <MakeRoomPicker />
         <ReleaseConfirmDialog />
         <PearlFloaters />
+        <WipeOverlay />
         <Onboarding />
         <Toasts />
         <ExpansionOverlay />
