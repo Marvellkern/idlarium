@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://idlarium.vercel.app/sitemap.xml

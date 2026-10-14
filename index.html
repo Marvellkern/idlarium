@@ -3,23 +3,167 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#7d9470" />
-    <meta name="description" content="Idlarium: a cozy low poly idle game. Collect water creatures from swamp frogs to reef sharks across living diorama habitats." />
+    <title>Idlarium – Cozy Low Poly Idle Aquarium Game</title>
+    <meta
+      name="description"
+      content="Collect fish, whales and sea creatures across eight habitats, from tide pools to the deep sea and polar ice, in a relaxing low poly 3D idle game. Free in your browser, no download."
+    />
+    <link rel="canonical" href="https://idlarium.vercel.app/" />
+    <!-- The game updates this to match the habitat you're in. -->
+    <meta name="theme-color" content="#3fc1c9" />
+
     <link rel="icon" type="image/svg+xml" href="/pearl.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph (Discord, WhatsApp, Facebook, Reddit previews) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Idlarium" />
+    <meta property="og:title" content="Idlarium – Cozy Low Poly Idle Aquarium Game" />
+    <meta property="og:description" content="Build a collection of water creatures, from swamp frogs to blue whales, across eight habitats in a relaxing browser idle game." />
+    <meta property="og:url" content="https://idlarium.vercel.app/" />
+    <meta property="og:image" content="https://idlarium.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A Kelp Forest habitat in Idlarium, full of fish, sea otters and a gray whale" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Idlarium – Cozy Low Poly Idle Aquarium Game" />
+    <meta name="twitter:description" content="Build a collection of water creatures, from swamp frogs to blue whales, across eight habitats in a relaxing browser idle game." />
+    <meta name="twitter:image" content="https://idlarium.vercel.app/og-image.png" />
+
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="POxMgazYKGGBVKixW36KgfsnJBJG7vCAhtgJSB0Pfko" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Idlarium",
+        "url": "https://idlarium.vercel.app/",
+        "description": "A relaxing low poly 3D idle game where you collect fish, whales and sea creatures across eight habitats: freshwater swamp, tide pool, coral reef, Amazon river, open ocean, kelp forest, deep sea and polar waters.",
+        "genre": ["Idle", "Incremental", "Simulation", "Casual"],
+        "gamePlatform": "Web browser",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "image": "https://idlarium.vercel.app/og-image.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
-    <title>Idlarium</title>
+
+    <style>
+      /*
+        About Idlarium: plain HTML so search engines (and anyone without JavaScript)
+        can read it. Before the game loads it shows on the loading screen; once the
+        game is running it lives behind Settings → About Idlarium (see src/ui/about.ts).
+      */
+      .about {
+        position: fixed;
+        inset: auto 0 0 0;
+        z-index: 60;
+        display: flex;
+        justify-content: center;
+        padding: 0 12px max(16px, env(safe-area-inset-bottom));
+        font-family: Nunito, system-ui, sans-serif;
+        color: #1f2a24;
+      }
+      .about-card {
+        width: 100%;
+        max-width: 560px;
+        max-height: 46vh;
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 18px 20px 16px;
+        border-radius: 22px;
+        background: rgb(255 255 255 / 0.78);
+        border: 1px solid rgb(255 255 255 / 0.7);
+        box-shadow: 0 10px 30px rgb(20 40 30 / 0.18);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+      }
+      .about h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        font-weight: 900;
+        letter-spacing: 0.3px;
+      }
+      .about p {
+        margin: 0 0 10px;
+        font-size: 15px;
+        line-height: 1.5;
+        font-weight: 600;
+        color: #3d4b43;
+      }
+      .about-close {
+        display: none;
+        width: 100%;
+        min-height: 44px;
+        margin-top: 4px;
+        border: 0;
+        border-radius: 12px;
+        background: #1f2a24;
+        color: #fff;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      /* While playing: tucked away until opened from Settings, so it never covers the game. */
+      .app-ready .about {
+        display: none;
+      }
+      .app-ready .about.open {
+        display: flex;
+        inset: 0;
+        align-items: center;
+        padding: 12px;
+        background: rgb(0 0 0 / 0.25);
+      }
+      .app-ready .about.open .about-card {
+        max-height: 88vh;
+      }
+      .app-ready .about.open .about-close {
+        display: block;
+      }
+    </style>
   </head>
   <body>
     <div id="root">
-      <div id="boot" style="position:fixed;inset:0;display:grid;place-items:center;background:#cfdcc0;font-family:Nunito,system-ui,sans-serif;color:#2e4232">
+      <div id="boot" style="position:fixed;inset:0;display:grid;justify-items:center;align-content:start;padding-top:18vh;background:#cfdcc0;font-family:Nunito,system-ui,sans-serif;color:#2e4232">
         <div style="text-align:center">
           <div style="font-size:34px;font-weight:900;letter-spacing:.5px">Idlarium</div>
           <div style="opacity:.7;margin-top:6px">Filling the habitats…</div>
         </div>
       </div>
     </div>
+
+    <section id="about" class="about" role="dialog" aria-labelledby="about-title">
+      <div class="about-card">
+        <h1 id="about-title">Idlarium</h1>
+        <p>
+          Idlarium is a cozy low poly 3D idle game you play right in your browser. Build a collection of water creatures across eight
+          living diorama habitats: a freshwater swamp, a tiny tide pool, a coral reef, the Amazon River, the open ocean, a kelp forest,
+          the deep sea and polar waters.
+        </p>
+        <p>
+          Your creatures make pearls, even while you're away. Spend them on new species, decorations and bigger habitats. Befriend rare
+          visitors like whales, sea otters and orcas, hatch eggs that sometimes bring rare color variants, and fill your codex with real
+          facts about every animal.
+        </p>
+        <p>
+          It's made to be relaxing: nothing ever dies, and forgetting to feed only slows things down a little. Idlarium is free, needs no
+          download or account, and works on phones and desktops.
+        </p>
+        <button type="button" class="about-close" id="about-close">Back to the game</button>
+      </div>
+    </section>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

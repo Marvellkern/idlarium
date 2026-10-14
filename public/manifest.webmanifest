@@ -1,0 +1,15 @@
+{
+  "name": "Idlarium",
+  "short_name": "Idlarium",
+  "description": "A cozy low poly 3D idle game: collect water creatures across eight habitats.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#cfdcc0",
+  "theme_color": "#3fc1c9",
+  "icons": [
+    { "src": "/pearl.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

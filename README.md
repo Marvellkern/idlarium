@@ -28,6 +28,10 @@ Handy URL flags while testing (development builds only, `npm run dev`; productio
 
 Or from the terminal: `npx vercel` (preview) and `npx vercel --prod`.
 
+### Search and link previews
+
+`index.html` has the page title, description, canonical URL, Open Graph and Twitter tags, JSON-LD (`VideoGame`) and a plain-HTML **About** section that search engines can read without running JavaScript. Players see it on the loading screen and under Settings → About Idlarium. `public/` holds `robots.txt`, `sitemap.xml` (update `lastmod` when the page changes), `og-image.png` (1200×630 link preview, a real in-game screenshot), the app icons and `manifest.webmanifest`. The Google Search Console verification tag (`google-site-verification`) is in `index.html`; keep it there so the site stays verified.
+
 ## Where to tweak balancing
 
 All balancing numbers live in data files, not in components:

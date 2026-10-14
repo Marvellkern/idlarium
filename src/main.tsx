@@ -4,6 +4,7 @@ import App from "./App";
 import "./index.css";
 import { useGame } from "./state/gameStore";
 import { useUI } from "./state/uiStore";
+import { initAbout } from "./ui/about";
 
 if (import.meta.env.DEV) {
   // Console handles for testing in development only.
@@ -17,6 +18,9 @@ if (import.meta.env.DEV) {
 const Gallery = import.meta.env.DEV ? lazy(() => import("./ui/Gallery")) : null;
 // ?gallery (model review) is a development-only tool.
 const showGallery = import.meta.env.DEV && new URLSearchParams(location.search).has("gallery");
+
+// The static About text (in index.html) moves behind Settings → About once the game runs.
+initAbout();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

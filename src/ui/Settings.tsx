@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
+import { openAbout } from "./about";
 import { play } from "../utils/audio";
 import { Modal } from "./Panel";
 
@@ -145,8 +146,18 @@ export function Settings() {
 
         <button
           type="button"
-          onClick={() => useUI.getState().setPanel("credits")}
+          onClick={() => {
+            useUI.getState().setPanel(null);
+            openAbout();
+          }}
           className="mt-2 min-h-11 rounded-xl bg-white/60 font-extrabold hover:bg-white/80"
+        >
+          About Idlarium
+        </button>
+        <button
+          type="button"
+          onClick={() => useUI.getState().setPanel("credits")}
+          className="min-h-11 rounded-xl bg-white/60 font-extrabold hover:bg-white/80"
         >
           Credits and licenses
         </button>
