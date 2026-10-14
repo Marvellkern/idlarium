@@ -1,6 +1,7 @@
 import { BIOMES, type BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID } from "../data/creatures";
-import { ECONOMY } from "../state/economy";
+import { ECONOMY, spaceShort } from "../state/economy";
+import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
 import { fmt, fmtDuration } from "../utils/format";
@@ -13,6 +14,10 @@ const SHORT: Record<BiomeId, string> = { swamp: "swamp", reef: "reef", ocean: "o
 export function AwaySummary() {
   const away = useUI((s) => s.away);
   const shown = useAnimatedNumber(away ? away.total : 0);
+  // Eggs never hatch into a full habitat: they wait.
+  const eggWaiting = useGame((s) =>
+    (Object.entries(s.habitats) as [BiomeId, NonNullable<(typeof s.habitats)[BiomeId]>][]).some(([b, h]) => h.eggs.some((e) => spaceShort(b, h, e.speciesId) > 0)),
+  );
   if (!away) return null;
   const close = () => {
     play("plink");
@@ -40,6 +45,7 @@ export function AwaySummary() {
             {away.eggsLaid === 1 ? "An egg was laid" : `${away.eggsLaid} eggs were laid`}. Tap them in the habitat to hatch.
           </p>
         )}
+        {eggWaiting && <p className="text-sm font-semibold text-ink-soft">An egg is waiting for space. Make room whenever you like, it'll wait.</p>}
         {passer && (
           <p className="rounded-xl bg-white/70 px-3 py-2 font-bold">
             A {passer.name.toLowerCase()} passed by while you were away. It's in your codex now.

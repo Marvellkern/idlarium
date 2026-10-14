@@ -1,12 +1,14 @@
 // Waiting eggs sit in a little cluster on the floor (or drift, in open water).
 // Tap a cluster to hatch it.
-import { Sparkles } from "@react-three/drei";
+import { Html, Sparkles } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { BIOMES, type BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID } from "../data/creatures";
+import { spaceShort } from "../state/economy";
 import { hatchEgg } from "../state/eggLogic";
+import { useGame } from "../state/gameStore";
 import type { Egg } from "../state/types";
 import { terrainHeight } from "./layout";
 import { mix, rng } from "./models/geo";
@@ -53,6 +55,8 @@ function EggCluster({ biome, index, egg }: { biome: BiomeId; index: number; egg:
     }));
   }, [index, egg.laidAt, big]);
   useEffect(() => () => mat.dispose(), [mat]);
+  // No room yet: the egg waits, with a little badge.
+  const short = useGame((s) => spaceShort(biome, s.habitats[biome], egg.speciesId));
   const ref = useRef<THREE.Group>(null);
   useFrame((s) => {
     const t = s.clock.elapsedTime + index;
@@ -69,6 +73,11 @@ function EggCluster({ biome, index, egg }: { biome: BiomeId; index: number; egg:
         <mesh key={i} geometry={eggGeo} material={mat} position={e.p} scale={e.s} />
       ))}
       <Sparkles count={6} scale={0.5} size={2} speed={0.3} color="#fff6c8" position={[0, 0.15, 0]} />
+      {short > 0 && (
+        <Html center position={[0, 0.42, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
+          <div className="rounded-full bg-white/90 px-2 py-0.5 text-xs font-extrabold whitespace-nowrap text-ink shadow-sm">Needs {short} space</div>
+        </Html>
+      )}
       <mesh geometry={hitGeo} material={hitMat} scale={0.7} onClick={onClick} />
     </group>
   );

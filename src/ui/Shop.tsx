@@ -126,6 +126,14 @@ function HabitatTab() {
           <div className="h-full rounded-full bg-leaf transition-all" style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
         </div>
         <p className="mt-2 text-sm font-semibold text-ink-soft">Small creatures use 1 space, medium 2, large 5, and giants 15.</p>
+        <button
+          type="button"
+          onClick={() => useUI.getState().setPanel("manage")}
+          disabled={h.creatures.length === 0}
+          className="mt-2 min-h-11 w-full rounded-xl bg-white/80 font-extrabold ring-1 ring-black/10 hover:bg-white disabled:opacity-50"
+        >
+          Manage creatures
+        </button>
       </div>
 
       <div className="rounded-2xl bg-white/60 p-3">

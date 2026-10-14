@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { SPECIES_BY_ID } from "../data/creatures";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
-import { letVisitorGo, makeRoom, roomInfo, tapVisitor } from "../state/visitorLogic";
+import { VARIANT_BY_ID } from "../data/creatures";
+import { expandForVisitor, letVisitorGo, openVisitorMakeRoom, roomInfo, tapVisitor } from "../state/visitorLogic";
 import { fmt } from "../utils/format";
 import { useNow } from "./hooks";
-import { SparkleIcon } from "./icons";
+import { HeartIcon, SparkleIcon } from "./icons";
 import { Modal, PearlButton } from "./Panel";
 
 const LINES = [
@@ -19,13 +20,15 @@ function art(n: string) {
 
 export function VisitorChip() {
   const v = useUI((s) => s.visitor);
-  const pearls = useGame((s) => s.pearls);
+  const picking = useUI((s) => !!s.makeRoom);
+  const hasCreatures = useGame((s) => (v ? (s.habitats[v.biome]?.creatures.length ?? 0) > 0 : false));
   const now = useNow(250);
   const line = useMemo(() => LINES[Math.floor(Math.random() * LINES.length)], [v?.id]);
-  if (!v) return null;
+  if (!v || picking) return null;
   const sp = SPECIES_BY_ID[v.speciesId];
   if (!sp) return null;
-  const name = sp.name.toLowerCase();
+  const name = ((v.variantId && VARIANT_BY_ID[v.variantId]?.name) || sp.name).toLowerCase();
+  const friend = v.returning !== undefined;
 
   if (v.state === "asking") {
     const info = roomInfo();
@@ -33,17 +36,16 @@ export function VisitorChip() {
       <Modal title={`No room for the ${name} yet`}>
         <div className="flex flex-col gap-3">
           <p className="font-semibold">
-            It needs {info?.need ?? "?"} space and you have {Math.max(0, info?.free ?? 0)} free. It'll wait while you decide.
+            It needs {info?.need ?? "?"} space and you have {Math.max(0, info?.free ?? 0)} free. It'll wait while you decide, no rush.
           </p>
-          {info?.canUpgrade ? (
-            <PearlButton
-              label={`Make room (+${info.upgradeAdds} space)`}
-              cost={fmt(info.upgradeCost)}
-              canAfford={pearls >= info.upgradeCost}
-              onClick={makeRoom}
-            />
-          ) : (
-            <p className="text-sm font-semibold text-ink-soft">This habitat is as big as it gets.</p>
+          {hasCreatures && (
+            <button type="button" onClick={openVisitorMakeRoom} className="min-h-12 rounded-xl bg-ink px-3 font-extrabold text-white hover:brightness-125">
+              Make room
+              <span className="block text-sm font-bold text-white/75">Choose someone to release</span>
+            </button>
+          )}
+          {info?.canAffordUpgrade && (
+            <PearlButton label={`Expand habitat (+${info.upgradeAdds} space)`} cost={fmt(info.upgradeCost)} canAfford onClick={expandForVisitor} />
           )}
           <button type="button" onClick={letVisitorGo} className="min-h-11 rounded-xl bg-white/80 font-extrabold hover:bg-white">
             Let it go
@@ -57,10 +59,10 @@ export function VisitorChip() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(72px+env(safe-area-inset-top))] z-30 flex justify-center px-3">
       <div className="glass-strong animate-pop-in pointer-events-auto flex max-w-sm items-center gap-2 overflow-hidden py-1.5 pr-1.5 pl-3">
-        <SparkleIcon size={20} className="shrink-0 text-amber-500" />
+        {friend ? <HeartIcon size={20} className="shrink-0 text-coral" /> : <SparkleIcon size={20} className="shrink-0 text-amber-500" />}
         <div className="min-w-0">
-          <div className="text-[15px] leading-tight font-extrabold">Visitor</div>
-          <div className="text-sm leading-tight font-semibold text-ink-soft">{line(name)}</div>
+          <div className="text-[15px] leading-tight font-extrabold">{friend ? "An old friend" : "Visitor"}</div>
+          <div className="text-sm leading-tight font-semibold text-ink-soft">{friend ? `Your old friend the ${name} came back to visit!` : line(name)}</div>
           <div className="mt-1 h-1 w-full rounded-full bg-black/8">
             <div className="h-full rounded-full bg-sun transition-[width] duration-300" style={{ width: `${left * 100}%` }} />
           </div>

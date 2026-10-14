@@ -1,9 +1,10 @@
 // Development builds only, with ?debug in the URL (never shipped to production).
 // Handy for testing pacing, expansion and day/night without waiting.
-import { speciesForBiome } from "../data/creatures";
+import { SIZE_SPACE, speciesForBiome } from "../data/creatures";
 import { useGame } from "../state/gameStore";
 import { spawnVisitor } from "../state/visitorLogic";
-import { nextExpansion } from "../state/economy";
+import { freeSpace, nextExpansion } from "../state/economy";
+import { uid } from "../utils/id";
 import { expandHabitat } from "../state/expandLogic";
 import { useUI } from "../state/uiStore";
 import { getHourOverride, setHourOverride } from "../utils/time";
@@ -59,6 +60,24 @@ export default function DebugPanel() {
       <button className={btn} onClick={() => g().debugAddPearls(100000)}>+100K pearls</button>
       <button className={btn} onClick={() => g().debugAddPearls(1e9)}>+1B pearls</button>
       <button className={btn} onClick={() => spawnVisitor()}>Spawn visitor</button>
+      <button className={btn} onClick={() => spawnVisitor(Date.now(), undefined, true)}>
+        Old friend visits
+      </button>
+      <button
+        className={btn}
+        onClick={() => {
+          // Fill the free space with the cheapest shop creature.
+          const s = g();
+          const h = s.habitats[biome];
+          const sp = speciesForBiome(biome).find((x) => x.obtain === "shop");
+          if (!h || !sp) return;
+          const n = Math.floor(freeSpace(biome, h) / SIZE_SPACE[sp.size]);
+          const add = Array.from({ length: n }, () => ({ uid: uid(), speciesId: sp.id }));
+          useGame.setState({ habitats: { ...s.habitats, [biome]: { ...h, creatures: [...h.creatures, ...add] } }, codex: { ...s.codex, [sp.id]: "owned" } });
+        }}
+      >
+        Fill habitat
+      </button>
       <select
         className="min-h-9 rounded-lg bg-white/80 px-1 text-xs font-bold"
         value=""

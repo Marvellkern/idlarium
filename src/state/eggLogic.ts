@@ -1,15 +1,24 @@
 import type { BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID, VARIANT_BY_ID } from "../data/creatures";
 import { play } from "../utils/audio";
+import { spaceShort } from "./economy";
 import { useGame } from "./gameStore";
 import { spawnHints, type Vec3 } from "./handoff";
 import { useUI } from "./uiStore";
 
-/** Hatch one egg; `at` is where the egg sits so the hatchling starts there. */
+/**
+ * Hatch one egg; `at` is where the egg sits so the hatchling starts there.
+ * Without room the egg keeps waiting and the Make Room picker opens instead.
+ */
 export function hatchEgg(biome: BiomeId, index: number, at?: Vec3) {
-  const egg = useGame.getState().habitats[biome]?.eggs[index];
-  const res = useGame.getState().hatchEgg(biome, index);
+  const h = useGame.getState().habitats[biome];
+  const egg = h?.eggs[index];
   const ui = useUI.getState();
+  if (egg && spaceShort(biome, h, egg.speciesId) > 0) {
+    ui.openMakeRoom({ kind: "egg", biome, index, ...(at ? { at } : {}) });
+    return;
+  }
+  const res = useGame.getState().hatchEgg(biome, index);
   if (!res.ok) {
     ui.toast(res.reason);
     return;

@@ -17,7 +17,9 @@ import {
   spaceAt,
   codexProgress,
   creatureCost,
+  habitatIncome,
   inShop,
+  releaseRefund,
   makeDailyGoals,
   newHabitat,
   offlineEarnings,
@@ -30,14 +32,22 @@ import {
   visitorWeights,
 } from "./economy";
 import { flushSave, throttledStorage } from "./saveStorage";
-import type { DailyGoal, HabitatSave, SaveData } from "./types";
+import type { DailyGoal, HabitatSave, OwnedCreature, SanctuaryEntry, SaveData } from "./types";
 
 export const SAVE_KEY = "idlarium-save";
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type ActionResult =
   | { ok: true; uid?: string; variantId?: string; from?: number; to?: number; milestoneReward?: number }
   | { ok: false; reason: string };
+
+export interface ReleaseResult {
+  ok: boolean;
+  refund: number;
+  released: OwnedCreature[];
+  /** How many went to the Sanctuary. */
+  toSanctuary: number;
+}
 
 export interface AwaySummary {
   seconds: number;
@@ -72,6 +82,7 @@ export function defaultSave(now = Date.now()): SaveData {
     stats: { totalEarned: 0, visitorsBefriended: 0, eggsHatched: 0 },
     tutorial: 0,
     milestones: { firstFullExpansion: false },
+    sanctuary: [],
   };
 }
 
@@ -186,6 +197,16 @@ export function normalizeSave(raw: unknown, now = Date.now()): SaveData {
     },
     tutorial: Math.floor(num(raw.tutorial, d.tutorial)),
     milestones: { firstFullExpansion: isObj(raw.milestones) && raw.milestones.firstFullExpansion === true },
+    sanctuary: Array.isArray(raw.sanctuary)
+      ? raw.sanctuary
+          .filter((e): e is Record<string, unknown> => isObj(e) && typeof e.speciesId === "string" && !!SPECIES_BY_ID[e.speciesId])
+          .map((e) => {
+            const sp = SPECIES_BY_ID[e.speciesId as string];
+            const variant = typeof e.variantId === "string" && VARIANT_BY_ID[e.variantId]?.speciesId === sp.id ? e.variantId : undefined;
+            return { speciesId: sp.id, ...(variant ? { variantId: variant } : {}), biome: sp.biome, releasedAt: Math.min(now, num(e.releasedAt, now)) };
+          })
+          .slice(-ECONOMY.sanctuary.maxEntries)
+      : [],
   };
 }
 
@@ -208,6 +229,8 @@ export function migrate(persisted: unknown, version: number): unknown {
     data.version = 2;
   }
   if (version < 3) data = migrateToV3(data);
+  // v3 → v4: releasing creatures. Only the Sanctuary list is new.
+  if (version < 4) data = { ...(data as Record<string, unknown>), sanctuary: [], version: 4 };
   return data;
 }
 
@@ -267,6 +290,7 @@ function pickSave(s: SaveData): SaveData {
     stats: s.stats,
     tutorial: s.tutorial,
     milestones: s.milestones,
+    sanctuary: s.sanctuary,
   };
 }
 
@@ -275,7 +299,12 @@ interface Actions {
   liveTick(now: number): "ok" | "away";
   applyAway(now: number): AwaySummary;
   buyCreature(speciesId: string): ActionResult;
-  befriend(speciesId: string, biome: BiomeId): ActionResult;
+  /** Welcome a visitor. `returning` = an old friend from the Sanctuary (it leaves the list). */
+  befriend(speciesId: string, biome: BiomeId, opts?: { variantId?: string; returning?: number }): ActionResult;
+  /** Let creatures go. The codex keeps them as owned; rares and legendaries go to the Sanctuary. */
+  releaseCreatures(biome: BiomeId, uids: string[]): ReleaseResult;
+  /** Undo a release: the creatures come back and the refund is taken back. */
+  restoreCreatures(biome: BiomeId, creatures: OwnedCreature[], refund: number): ActionResult;
   hatchEgg(biome: BiomeId, index: number): ActionResult;
   /** Grow a habitat one size level. */
   expandHabitat(biome: BiomeId): ActionResult;
@@ -398,20 +427,68 @@ export const useGame = create<GameState>()(
         return { ok: true, uid: newUid };
       },
 
-      befriend(speciesId, biome) {
+      befriend(speciesId, biome, opts = {}) {
         const s = get();
         const sp = SPECIES_BY_ID[speciesId];
         const h = s.habitats[biome];
         if (!sp || !h) return { ok: false, reason: "Can't befriend that here." };
         if (spaceUsed(h) + SIZE_SPACE[sp.size] > capacityOf(biome, h)) return { ok: false, reason: "No room." };
         const newUid = uid();
+        const variantId = opts.variantId && VARIANT_BY_ID[opts.variantId]?.speciesId === speciesId ? opts.variantId : undefined;
+        // An old friend coming home leaves the Sanctuary list.
+        const back = opts.returning === undefined ? -1 : s.sanctuary.findIndex((e) => e.speciesId === speciesId && e.releasedAt === opts.returning);
         set({
-          habitats: mutHabitat(s, biome, (h) => ({ ...h, creatures: [...h.creatures, { uid: newUid, speciesId }] })),
-          codex: { ...s.codex, [speciesId]: "owned" },
+          habitats: mutHabitat(s, biome, (h) => ({ ...h, creatures: [...h.creatures, { uid: newUid, speciesId, ...(variantId ? { variantId } : {}) }] })),
+          codex: { ...s.codex, [speciesId]: "owned", ...(variantId ? { [variantId]: "owned" as const } : {}) },
           stats: { ...s.stats, visitorsBefriended: s.stats.visitorsBefriended + 1 },
+          ...(back >= 0 ? { sanctuary: s.sanctuary.filter((_, i) => i !== back) } : {}),
         });
         get().trackGoal("befriend");
         return { ok: true, uid: newUid };
+      },
+
+      releaseCreatures(biome, uids) {
+        const s = get();
+        const h = s.habitats[biome];
+        const none: ReleaseResult = { ok: false, refund: 0, released: [], toSanctuary: 0 };
+        if (!h) return none;
+        const wanted = new Set(uids);
+        const released = h.creatures.filter((c) => wanted.has(c.uid));
+        if (!released.length) return none;
+        // Refunds use the habitat's income from before the release.
+        const now = Date.now();
+        const homeIncome = habitatIncome(h, now);
+        let refund = 0;
+        const freed: SanctuaryEntry[] = [];
+        for (const c of released) {
+          const sp = SPECIES_BY_ID[c.speciesId];
+          if (!sp) continue;
+          refund += releaseRefund(sp, homeIncome);
+          if (ECONOMY.release.confirmRarities.includes(sp.rarity))
+            freed.push({ speciesId: sp.id, ...(c.variantId ? { variantId: c.variantId } : {}), biome, releasedAt: now });
+        }
+        // The codex is left alone on purpose: what you've owned stays owned.
+        set({
+          pearls: s.pearls + refund,
+          habitats: mutHabitat(s, biome, (h) => ({ ...h, creatures: h.creatures.filter((c) => !wanted.has(c.uid)) })),
+          ...(freed.length ? { sanctuary: [...s.sanctuary, ...freed].slice(-ECONOMY.sanctuary.maxEntries) } : {}),
+        });
+        return { ok: true, refund, released, toSanctuary: freed.length };
+      },
+
+      restoreCreatures(biome, creatures, refund) {
+        const s = get();
+        const h = s.habitats[biome];
+        if (!h || !creatures.length) return { ok: false, reason: "Nothing to bring back." };
+        if (s.pearls < refund) return { ok: false, reason: "Those pearls were already spent, so this can't be undone." };
+        const back = creatures.filter((c) => SPECIES_BY_ID[c.speciesId] && !h.creatures.some((x) => x.uid === c.uid));
+        const need = back.reduce((a, c) => a + SIZE_SPACE[SPECIES_BY_ID[c.speciesId].size], 0);
+        if (spaceUsed(h) + need > capacityOf(biome, h)) return { ok: false, reason: "That space is taken now, so this can't be undone." };
+        set({
+          pearls: s.pearls - refund,
+          habitats: mutHabitat(s, biome, (h) => ({ ...h, creatures: [...h.creatures, ...back] })),
+        });
+        return { ok: true };
       },
 
       hatchEgg(biome, index) {

@@ -62,6 +62,29 @@ export const ECONOMY = {
     firstFullRewardMinutes: 15,
     firstFullRewardFloor: 25_000,
   },
+  release: {
+    /** Species with a shop price refund this share of their unscaled baseCost (always less than you paid). */
+    shopRefundRate: 0.25,
+    /** Species without a price, by rarity. Common: this share of the biome's cheapest shop creature. */
+    commonRefundRate: 0.25,
+    /** Uncommon / rare / legendary: minutes of the income of the habitat it lived in. */
+    incomeMinutes: { common: 0, uncommon: 2, rare: 5, legendary: 10 } as Record<Rarity, number>,
+    /** One-tap releases can be undone for this long. */
+    undoSeconds: 5,
+    /** Releasing this many or more at once always asks first. */
+    confirmBulkAt: 5,
+    /** Rarities that always ask first (and go to the Sanctuary). */
+    confirmRarities: ["rare", "legendary"] as Rarity[],
+    /** Release animation length. */
+    animMs: 1500,
+    /** Bulk releases animate this many creatures; the rest just fade. */
+    animateMax: 4,
+  },
+  sanctuary: {
+    maxEntries: 30,
+    /** When a visitor arrives in a habitat with old friends in the Sanctuary, chance it's one of them. */
+    returnChance: 0.12,
+  },
 };
 
 const HOUR = 3600_000;
@@ -259,6 +282,52 @@ export function inShop(s: Species, codex: SaveData["codex"]) {
   if (s.baseCost === undefined) return false;
   if (s.obtain === "shop") return true;
   return s.obtain === "visitor" && codex[s.id] === "owned";
+}
+
+// ───────────── Release ─────────────
+
+const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, legendary: 3 };
+
+/** The cheapest creature in a biome's shop (unscaled). */
+export function cheapestShopCost(biome: BiomeId) {
+  const costs = speciesForBiome(biome)
+    .filter((s) => s.obtain === "shop" && s.baseCost !== undefined)
+    .map((s) => s.baseCost!);
+  return costs.length ? Math.min(...costs) : 0;
+}
+
+/**
+ * Pearls back for releasing one creature. Priced species refund a share of their
+ * unscaled baseCost, so buying then releasing always loses pearls. Unpriced ones
+ * (visitor-only) refund by rarity. `homeIncome` is its habitat's income per second.
+ */
+export function releaseRefund(sp: Species, homeIncome: number) {
+  const r = ECONOMY.release;
+  if (sp.baseCost !== undefined) return Math.floor(sp.baseCost * r.shopRefundRate);
+  const floor = Math.floor(cheapestShopCost(sp.biome) * r.commonRefundRate);
+  if (sp.rarity === "common") return floor;
+  return Math.max(floor, Math.round(homeIncome * r.incomeMinutes[sp.rarity] * 60));
+}
+
+/** Rare and legendary releases always ask first; so do big batches. */
+export function releaseNeedsConfirm(sp: Species, count: number) {
+  return ECONOMY.release.confirmRarities.includes(sp.rarity) || count >= ECONOMY.release.confirmBulkAt;
+}
+
+/** Make Room order: lowest rarity first, then lowest income. */
+export function releaseOrder(a: Species, b: Species) {
+  return RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity] || a.pearlsPerSec - b.pearlsPerSec;
+}
+
+export function freeSpace(biome: BiomeId, h: HabitatSave | undefined) {
+  return h ? capacityOf(biome, h) - spaceUsed(h) : 0;
+}
+
+/** Space still missing before this species fits (0 = it fits). */
+export function spaceShort(biome: BiomeId, h: HabitatSave | undefined, speciesId: string) {
+  const sp = SPECIES_BY_ID[speciesId];
+  if (!sp) return 0;
+  return Math.max(0, SIZE_SPACE[sp.size] - freeSpace(biome, h));
 }
 
 // ───────────── Eggs ─────────────

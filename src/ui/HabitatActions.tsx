@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ECONOMY } from "../state/economy";
+import { ECONOMY, spaceShort } from "../state/economy";
 import { useGame } from "../state/gameStore";
 import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
@@ -23,8 +23,13 @@ export function HabitatActions() {
   const stats = useHabitatStats(biome);
   const [floaters, setFloaters] = useState<number[]>([]);
   const panel = useUI((s) => s.panel);
-  const eggs = useGame((s) => s.habitats[s.activeBiome]?.eggs);
+  const h = useGame((s) => s.habitats[s.activeBiome]);
+  const eggs = h?.eggs;
   if (!stats || panel) return null;
+  // Hatch the first egg that fits; if none fit, the first one opens Make Room.
+  const ready = eggs ? eggs.findIndex((e) => spaceShort(biome, h, e.speciesId) === 0) : -1;
+  const short = eggs?.length && ready < 0 ? spaceShort(biome, h, eggs[0].speciesId) : 0;
+  const eggIndex = Math.max(0, ready);
   const v = stats.happiness.value;
   const { min, max } = ECONOMY.happiness;
   const pct = (v - min) / (max - min);
@@ -47,18 +52,22 @@ export function HabitatActions() {
       {eggs && eggs.length > 0 && (
         <button
           type="button"
-          onClick={() => hatchEgg(biome, 0)}
-          title="Tap an egg cluster in the habitat, or here, to hatch it"
-          aria-label={`Hatch an egg. ${eggs.length} waiting, first is a ${SPECIES_BY_ID[eggs[0].speciesId]?.name ?? "creature"} egg`}
-          className="glass animate-shimmer pointer-events-auto flex min-h-[52px] items-center gap-2 py-1.5 pr-4 pl-2"
+          onClick={() => hatchEgg(biome, eggIndex)}
+          title={short ? "Not enough space to hatch. Tap to make room" : "Tap an egg cluster in the habitat, or here, to hatch it"}
+          aria-label={
+            short
+              ? `${eggs.length} ${eggs.length === 1 ? "egg" : "eggs"} waiting for space. Needs ${short} more space. Make room`
+              : `Hatch an egg. ${eggs.length} waiting, next is a ${SPECIES_BY_ID[eggs[eggIndex].speciesId]?.name ?? "creature"} egg`
+          }
+          className={`glass pointer-events-auto flex min-h-[52px] items-center gap-2 py-1.5 pr-4 pl-2 ${short ? "" : "animate-shimmer"}`}
         >
           <span className="grid h-10 w-10 place-items-center rounded-full bg-white/70">
             <EggIcon size={20} />
           </span>
           <span className="text-left leading-tight">
-            <span className="block text-[15px] font-extrabold">Hatch</span>
+            <span className="block text-[15px] font-extrabold">{short ? "Make room" : "Hatch"}</span>
             <span className="block text-sm font-bold text-ink-soft">
-              {eggs.length} {eggs.length === 1 ? "egg" : "eggs"} waiting
+              {short ? `Needs ${short} space` : `${eggs.length} ${eggs.length === 1 ? "egg" : "eggs"} waiting`}
             </span>
           </span>
         </button>

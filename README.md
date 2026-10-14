@@ -15,8 +15,8 @@ npm run preview    # serve the production build locally
 
 Handy URL flags while testing (development builds only, `npm run dev`; production ignores them and doesn't even ship the code):
 
-- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, fake the time of day, add pearls, spawn specific visitors, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
-- `?reducedmotion` pretends the device asked for reduced motion (to test the fade instead of the growth animation).
+- `?debug` shows a small panel to set a habitat's size level (1–5), expand for free with the full animation, fill the habitat to capacity, fake the time of day, add pearls, spawn specific visitors or an old friend from the Sanctuary, lay an egg, and fake being away (2h, or 10h to hit the cap) or unfed.
+- `?reducedmotion` pretends the device asked for reduced motion (to test the fades instead of the growth and swim-off animations).
 - `?gallery` shows every procedural creature model; `?gallery=ocean` (or `swamp`, `reef`, `deep`) shows one habitat bigger.
 
 ## Deploy to Vercel
@@ -40,6 +40,8 @@ All balancing numbers live in data files, not in components:
 | **Expansion per habitat**: space at each of the 5 levels, Lv2 cost and cost growth, how much the diorama grows, the free terrain feature per level | `expansion` in `src/data/biomes.ts` |
 | **Expansion, shared**: size multipliers per level, new decoration slots per level, terrain feature names, animation length | `src/data/expansion.ts` |
 | First-full-expansion reward | `ECONOMY.expansion` in `src/state/economy.ts` |
+| **Release refunds**, Undo time, when a confirm is needed, animation length | `ECONOMY.release` in `src/state/economy.ts` (rules in `releaseRefund()` just below it) |
+| Sanctuary size and how often old friends come back | `ECONOMY.sanctuary` in `src/state/economy.ts` |
 | Decorations: cost, happiness bonus, visitor boosts, hideouts | `src/data/decorations.ts` |
 | Daily goals: the pool, targets, reward size (minutes of income) | `src/data/goals.ts` |
 | Starting pearls, offline rate and cap, happiness rules, visitor timing, egg rates and variant chance | `ECONOMY` in `src/state/economy.ts` |
@@ -83,7 +85,11 @@ Visitors and eggs (which the sim ignores) speed things up a bit. Playtest and tu
 - **Giants** (whales, whale shark, giant squid) swim a wide loop that passes beyond the diorama walls and dissolves at the glass, which sells their size. Humpbacks occasionally breach, dolphins leap, and sperm whales dive in from above.
 - **Capacity**: each habitat has space points. Small creatures use 1, medium 2, large 5, giants 15.
 - **Expansion**: each habitat grows through 5 size levels. Buying one (Shop → Habitat, or tap the space counter in the top bar) shows a glowing outline of the next size first, then the walls slide out, new floor fills in, a free terrain feature pops up and the camera eases back (about 2 seconds; tap to skip; a quick fade with reduced motion). Each level adds space, 2–4 decoration spots and a feature like a mangrove edge, a rock arch or a second vent. Creatures, visitors and whale loops use the new size right away; decorations never move. The first habitat to reach full size gives a one-time pearl gift.
-- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding) and v2 → v3 (expansion). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
+- **Release**: tap a creature and choose Release, or open Shop → Habitat → Manage creatures to release several of one species at once (a count stepper, so a big school isn't 30 taps). Released creatures turn, swim off toward the edge with a sparkle and fade (a plain fade with reduced motion). The codex keeps them as owned. Everyday releases happen in one tap with a 5-second Undo; rares, legendaries and batches of 5 or more ask first and show the space freed, the income lost and the pearls back.
+- **Refunds**: species with a shop price give back 25% of their unscaled `baseCost`, so buying and releasing always loses pearls. Visitor-only species give back a few minutes of their habitat's income (2 for uncommon, 5 for rare, 10 for legendary), never less than 25% of that biome's cheapest shop creature.
+- **Make Room**: when a visitor or an egg doesn't fit, a picker lists the habitat's creatures (lowest rarity and income first) with how much space each frees, then "Release & Welcome" or "Release & Hatch". The visitor's timer stays paused while you choose. Eggs never hatch past capacity and never disappear: they wait with a "Needs X space" badge, and the away summary mentions them.
+- **Sanctuary**: released rares and legendaries are listed in a Sanctuary tab in the codex (up to 30, oldest dropped first). Now and then one comes back as a visitor marked with a heart; befriending it brings it home and takes it off the list.
+- **Saves** autosave every 15 seconds and whenever the tab is hidden. They carry a version number with migrations: v1 → v2 (eggs, goals, onboarding), v2 → v3 (expansion) and v3 → v4 (the Sanctuary list for releases; nothing else changes). The v3 step turns the old capacity level into a size level (the smallest level with at least as much space, so nobody loses room) and moves decorations from grid indices to stable slot keys at the exact same positions. Settings has Export, Import and a reset that needs three taps.
 - **Graphics**: High adds shadows, caustics, sun shafts and Deep Sea bloom. If frame rate drops, the game first lowers pixel density, then switches to Low once (with a message).
 
 ## Swapping in real 3D models
@@ -100,7 +106,7 @@ Drop files into `public/audio/` and set their paths in `src/data/audio.ts` (one 
 src/
   data/      species, biomes, decorations, goals, expansion levels, pure habitat geometry
              (size per level, terrain, stable decoration slots), audio paths, credits
-  state/     zustand store + save migrations, pure economy, visitors, eggs, expansion, game loop
+  state/     zustand store + save migrations, pure economy, visitors, eggs, expansion, release, game loop
   scene/     R3F diorama, lighting and day/night, creatures, schools (instanced boids),
              movement, swim shader, decorations, eggs, visitors, deep-sea bloom
   ui/        top bar, bottom nav, shop, decorate, codex, habitats, goals, settings,
@@ -110,4 +116,4 @@ src/
 
 ## Build status
 
-All 13 steps of the original brief are done, plus the Tank Expansion update: four habitats (Freshwater Swamp, Coral Reef, Open Ocean, Deep Sea) that each grow through 5 size levels, with 38 species, 10 color variants, 33 decorations plus 16 free terrain features, visitors, eggs, codex, day/night, daily goals, onboarding, sounds and a performance pass. Polar Waters and the other stretch goals are next if wanted.
+All 13 steps of the original brief are done, plus the Tank Expansion and Release updates: four habitats (Freshwater Swamp, Coral Reef, Open Ocean, Deep Sea) that each grow through 5 size levels, with 38 species, 10 color variants, 33 decorations plus 16 free terrain features, visitors, eggs, releasing and a Sanctuary, codex, day/night, daily goals, onboarding, sounds and a performance pass. Polar Waters and the other stretch goals are next if wanted.

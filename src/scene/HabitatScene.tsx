@@ -1,6 +1,7 @@
 import { Sparkles } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { lazy, Suspense, useMemo, useRef } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
 import { BIOMES, type BiomeId } from "../data/biomes";
 import { SPECIES_BY_ID } from "../data/creatures";
 import { EXPAND_ANIM_MS, REDUCED_FADE_MS } from "../data/expansion";
@@ -13,11 +14,13 @@ import { CameraRig } from "./CameraRig";
 import { Creature } from "./Creature";
 import { CreatureSchool } from "./CreatureSchool";
 import { Decorations } from "./Decorations";
+import { Departures } from "./Departures";
 import { Diorama, LightShafts } from "./Diorama";
 import { Eggs } from "./Eggs";
 import { ExpansionBurst } from "./ExpansionBurst";
 import { Feeding } from "./Feeding";
-import { expansionCtx } from "./registry";
+import { creaturePositions, expansionCtx } from "./registry";
+import { sceneLookup } from "../state/handoff";
 import { TerrainFeatures } from "./TerrainFeatures";
 import { Visitor } from "./Visitor";
 
@@ -77,6 +80,20 @@ export function HabitatScene({ biome }: { biome: BiomeId }) {
     return { singles, schools: [...schools.entries()] };
   }, [habitat?.creatures]);
 
+  // Lets game logic ask where a creature is (released ones swim off from there).
+  useEffect(() => {
+    const v = new THREE.Vector3();
+    sceneLookup.positionOf = (uid) => {
+      const get = creaturePositions.get(uid);
+      if (!get) return null;
+      get(v);
+      return { x: v.x, y: v.y, z: v.z };
+    };
+    return () => {
+      sceneLookup.positionOf = null;
+    };
+  }, []);
+
   const startleAt = expansion?.startedAt;
   const moreLight = b.expansion.features.indexOf("more-light") + 2;
 
@@ -118,6 +135,7 @@ export function HabitatScene({ biome }: { biome: BiomeId }) {
       {habitat && habitat.eggs.length > 0 && <Eggs biome={biome} eggs={habitat.eggs} />}
 
       {visitor && <Visitor key={visitor.id} visitor={visitor} dims={simDims} />}
+      <Departures biome={biome} dims={simDims} />
       <Feeding biome={biome} dims={simDims} />
       {expansion && !reduced && <ExpansionBurst startedAt={expansion.startedAt} dims={dims} />}
 

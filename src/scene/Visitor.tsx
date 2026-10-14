@@ -15,7 +15,7 @@ const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const hitGeometry = new THREE.SphereGeometry(0.5, 6, 4);
 
 export function Visitor({ visitor, dims }: { visitor: ActiveVisitor; dims: Dims }) {
-  const model = useMemo(() => getCreatureModel(visitor.speciesId), [visitor.speciesId]);
+  const model = useMemo(() => getCreatureModel(visitor.speciesId, visitor.variantId), [visitor.speciesId, visitor.variantId]);
   const sp = SPECIES_BY_ID[visitor.speciesId];
   const giant = sp?.size === "XL";
   const material = useMemo(() => {

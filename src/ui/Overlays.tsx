@@ -2,6 +2,7 @@
 import { BIOMES } from "../data/biomes";
 import { RARITY_LABEL, SPECIES_BY_ID, VARIANT_BY_ID } from "../data/creatures";
 import { useGame } from "../state/gameStore";
+import { requestRelease } from "../state/releaseLogic";
 import { useUI } from "../state/uiStore";
 import { fmtRate } from "../utils/format";
 import { CloseIcon } from "./icons";
@@ -14,11 +15,20 @@ export function Toasts() {
       role="status"
       aria-live="polite"
     >
-      {toasts.map((t) => (
-        <div key={t.id} className="glass-strong animate-pop-in max-w-sm px-4 py-2.5 text-center text-[15px] font-bold">
-          {t.text}
-        </div>
-      ))}
+      {toasts.map((t) =>
+        t.action ? (
+          <div key={t.id} className="glass-strong animate-pop-in pointer-events-auto flex max-w-sm items-center gap-2 py-1.5 pr-1.5 pl-4 text-[15px] font-bold">
+            <span>{t.text}</span>
+            <button type="button" onClick={t.action.run} className="min-h-11 shrink-0 rounded-xl bg-ink px-3.5 font-extrabold text-white hover:brightness-125">
+              {t.action.label}
+            </button>
+          </div>
+        ) : (
+          <div key={t.id} className="glass-strong animate-pop-in max-w-sm px-4 py-2.5 text-center text-[15px] font-bold">
+            {t.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }
@@ -47,6 +57,13 @@ export function SelectedInfo() {
           className="min-h-11 rounded-xl bg-white/80 px-3 text-sm font-extrabold hover:bg-white"
         >
           Codex
+        </button>
+        <button
+          type="button"
+          onClick={() => requestRelease(biome, [c.uid])}
+          className="min-h-11 rounded-xl px-2.5 text-sm font-extrabold text-ink-soft hover:bg-black/5 hover:text-ink"
+        >
+          Release
         </button>
         <button
           type="button"

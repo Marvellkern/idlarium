@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { BIOME_ORDER, BIOMES, type BiomeId } from "../data/biomes";
 import { canBreed, RARITY_LABEL, SPECIES_BY_ID, speciesForBiome, VARIANT_BY_ID, type Species } from "../data/creatures";
 import { CODEX_TIERS, codexProgress } from "../state/economy";
@@ -7,6 +7,7 @@ import { useUI } from "../state/uiStore";
 import { play } from "../utils/audio";
 import { fmt, fmtRate } from "../utils/format";
 import { CreatureGlyph } from "./CreatureGlyph";
+import { HeartIcon } from "./icons";
 import { Modal, PearlButton } from "./Panel";
 
 const CodexTurntable = lazy(() => import("./CodexTurntable"));
@@ -19,6 +20,8 @@ export function Codex() {
   const active = useGame((s) => s.activeBiome);
   const biome = useUI((s) => s.codexBiome) ?? active;
   const card = useUI((s) => s.codexCard);
+  const sanctuaryCount = useGame((s) => s.sanctuary.length);
+  const [sanctuary, setSanctuary] = useState(false);
   const close = () => useUI.getState().setPanel(null);
 
   return (
@@ -34,11 +37,14 @@ export function Codex() {
                 <button
                   key={b}
                   role="tab"
-                  aria-selected={b === biome}
+                  aria-selected={!sanctuary && b === biome}
                   disabled={!cfg.playable}
-                  onClick={() => useUI.getState().setCodexBiome(b)}
+                  onClick={() => {
+                    setSanctuary(false);
+                    useUI.getState().setCodexBiome(b);
+                  }}
                   className={`min-h-11 shrink-0 rounded-xl px-3 text-[15px] font-extrabold ${
-                    b === biome ? "bg-ink text-white" : cfg.playable ? "bg-white/60" : "bg-white/30 text-ink-soft"
+                    !sanctuary && b === biome ? "bg-ink text-white" : cfg.playable ? "bg-white/60" : "bg-white/30 text-ink-soft"
                   }`}
                 >
                   {cfg.name}
@@ -46,8 +52,16 @@ export function Codex() {
                 </button>
               );
             })}
+            <button
+              role="tab"
+              aria-selected={sanctuary}
+              onClick={() => setSanctuary(true)}
+              className={`flex min-h-11 shrink-0 items-center gap-1 rounded-xl px-3 text-[15px] font-extrabold ${sanctuary ? "bg-ink text-white" : "bg-white/60"}`}
+            >
+              <HeartIcon size={16} /> Sanctuary{sanctuaryCount ? ` (${sanctuaryCount})` : ""}
+            </button>
           </div>
-          <BiomeCodex biome={biome} />
+          {sanctuary ? <Sanctuary /> : <BiomeCodex biome={biome} />}
         </>
       )}
     </Modal>
@@ -105,6 +119,54 @@ function BiomeCodex({ biome }: { biome: BiomeId }) {
           ...(s.variants ?? []).map((v) => <Tile key={v.id} sp={s} variantId={v.id} state={codex[v.id]} />),
         ])}
       </div>
+    </>
+  );
+}
+
+/** Rare friends you've released, newest first. Some come back to visit. */
+function Sanctuary() {
+  const list = useGame((s) => s.sanctuary);
+  if (!list.length)
+    return (
+      <p className="rounded-2xl bg-white/60 px-4 py-6 text-center font-semibold text-ink-soft">
+        Rare and legendary friends you release are listed here. Now and then one swims back to visit.
+      </p>
+    );
+  return (
+    <>
+      <p className="mb-3 text-sm font-semibold text-ink-soft">
+        Rare and legendary friends you've released. Now and then one swims back to visit, marked with a heart.
+      </p>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {[...list].reverse().map((e, i) => {
+          const sp = SPECIES_BY_ID[e.speciesId];
+          if (!sp) return null;
+          const name = (e.variantId && VARIANT_BY_ID[e.variantId]?.name) || sp.name;
+          const r = RARITY_LABEL[sp.rarity];
+          return (
+            <li key={e.releasedAt + e.speciesId + i}>
+              <button
+                type="button"
+                onClick={() => useUI.getState().setCodexCard(e.variantId ?? sp.id)}
+                className="flex w-full items-center gap-3 rounded-2xl bg-white/60 p-2 text-left hover:bg-white/80"
+              >
+                <div className="grid h-14 w-16 shrink-0 place-items-center rounded-xl bg-white/70">
+                  <CreatureGlyph speciesId={sp.id} variantId={e.variantId} size={52} />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-black">{name}</div>
+                  <div className="text-sm font-bold text-ink-soft">
+                    <span aria-hidden>{r.icon}</span> {r.label} · {BIOMES[e.biome].name}
+                  </div>
+                  <div className="text-sm font-semibold text-ink-soft">
+                    Left on {new Date(e.releasedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }

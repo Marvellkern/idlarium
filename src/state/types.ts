@@ -30,6 +30,14 @@ export interface HabitatSave {
   eggs: Egg[];
 }
 
+/** A rare or legendary creature that was released. It may come back as a visitor. */
+export interface SanctuaryEntry {
+  speciesId: string;
+  variantId?: string;
+  biome: BiomeId;
+  releasedAt: number;
+}
+
 /** Codex keys are species ids and variant ids. */
 export type CodexState = "spotted" | "owned";
 
@@ -60,4 +68,6 @@ export interface SaveData {
   /** First-time tips: index of the next step, or -1 when finished or skipped. */
   tutorial: number;
   milestones: { firstFullExpansion: boolean };
+  /** Released rares and legendaries, oldest first (capped; the oldest drop off). */
+  sanctuary: SanctuaryEntry[];
 }

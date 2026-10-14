@@ -11,6 +11,8 @@ import { DecorateMode } from "./ui/DecorateMode";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { ExpansionOverlay } from "./ui/ExpansionOverlay";
 import { HabitatActions } from "./ui/HabitatActions";
+import { Manage } from "./ui/Manage";
+import { MakeRoomPicker, PearlFloaters, ReleaseConfirmDialog } from "./ui/ReleaseUI";
 import { Onboarding } from "./ui/Onboarding";
 import { EmptyState, SelectedInfo, Toasts } from "./ui/Overlays";
 import { Settings } from "./ui/Settings";
@@ -46,7 +48,9 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const ui = useUI.getState();
-      if (ui.codexCard) ui.setCodexCard(null);
+      if (ui.releaseConfirm) ui.askRelease(null);
+      else if (ui.makeRoom) ui.openMakeRoom(null);
+      else if (ui.codexCard) ui.setCodexCard(null);
       else if (ui.panel) ui.setPanel(null);
       else if (ui.selectedUid) ui.select(null);
     };
@@ -80,9 +84,13 @@ export default function App() {
           {panel === "settings" && <Settings />}
           {panel === "goals" && <GoalsPanel />}
           {panel === "credits" && <Credits />}
+          {panel === "manage" && <Manage />}
         </ErrorBoundary>
         <BottomNav />
         <AwaySummary />
+        <MakeRoomPicker />
+        <ReleaseConfirmDialog />
+        <PearlFloaters />
         <Onboarding />
         <Toasts />
         <ExpansionOverlay />
