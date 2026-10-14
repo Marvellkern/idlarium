@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-pearl: #fbe6ee;
+  --color-ink: #1f2a24;
+  --color-ink-soft: #4a5a50;
+  --color-sun: #ffd166;
+  --color-leaf: #5f9a4a;
+  --color-coral: #ff7b6b;
+}
+
+:root {
+  --bg-top: #cfdcc0;
+  --bg-bottom: #7d9470;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: radial-gradient(120% 90% at 50% 30%, var(--bg-top), var(--bg-bottom));
+  transition: background 0.8s ease;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Frosted glass panels over the 3D scene */
+@utility glass {
+  background: rgb(255 255 255 / 0.62);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / 0.7);
+  box-shadow: 0 8px 30px rgb(20 40 30 / 0.12);
+  border-radius: 16px;
+}
+
+@utility glass-strong {
+  background: rgb(255 255 255 / 0.82);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / 0.8);
+  box-shadow: 0 10px 40px rgb(20 40 30 / 0.18);
+  border-radius: 16px;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+@keyframes shimmer {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 209 102 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(255 209 102 / 0);
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.25s ease-out both;
+}
+.animate-float-up {
+  animation: float-up 1.2s ease-out forwards;
+}
+.animate-shimmer {
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+button:disabled {
+  cursor: default;
+}
+:focus-visible {
+  outline: 3px solid #ffd166;
+  outline-offset: 2px;
+}

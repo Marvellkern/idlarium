@@ -1,0 +1,326 @@
+// Pure economy functions + tuning constants. No React, no store access.
+// Tweak the ECONOMY block to rebalance pacing.
+
+import { BIOMES, type BiomeId } from "../data/biomes";
+import {
+  canBreed,
+  COST_GROWTH,
+  SIZE_SPACE,
+  SPECIES_BY_ID,
+  VISITOR_RARITY_WEIGHT,
+  speciesForBiome,
+  type Rarity,
+  type Species,
+} from "../data/creatures";
+import { GOAL_REWARD_FLOOR, GOALS, GOALS_PER_DAY, type GoalContext } from "../data/goals";
+import { SIZE_LEVELS, TERRAIN_FEATURES } from "../data/expansion";
+import { clampLevel, newSlotsAt } from "../data/habitatGeometry";
+import { DECORATION_BY_ID } from "../data/decorations";
+import type { DailyGoal, Egg, HabitatSave, SaveData } from "./types";
+
+export const ECONOMY = {
+  startingPearls: 25,
+  /** Offline income runs at this fraction of live income. */
+  offlineRate: 0.5,
+  offlineCapHours: 8,
+  /** Being hidden/away longer than this triggers the "While you were away" logic. */
+  awayThresholdSec: 60,
+  happiness: {
+    min: 0.5,
+    max: 1.5,
+    base: 1.0,
+    /** Max total bonus from decorations. */
+    decoMax: 0.4,
+    /** Small bonus right after feeding. */
+    fedBonus: 0.1,
+    fedBonusHours: 2,
+    /** Happiness only starts drifting down after this many hours without feeding… */
+    neglectAfterHours: 12,
+    /** …and then drops by this much per hour (never below min). */
+    neglectPerHour: 0.03,
+  },
+  visitor: {
+    minIntervalSec: 180,
+    maxIntervalSec: 480,
+    tapWindowSec: 25,
+    /** Weight multiplier for species you already own (favors discovery). */
+    ownedWeight: 0.6,
+    /** Away for at least this long → small chance a visitor "passed by". */
+    awayPassByMinMinutes: 30,
+    awayPassByChance: 0.6,
+  },
+  eggs: {
+    /** Chance per real hour that a species with 2+ members in a habitat lays an egg. */
+    chancePerHour: { common: 0.25, uncommon: 0.15, rare: 0.1, legendary: 0.05 } as Record<Rarity, number>,
+    /** Eggs waiting to hatch, per habitat. */
+    maxWaiting: 3,
+    /** Chance a hatchling is a color variant (if the species has any). */
+    variantChance: 0.1,
+  },
+  expansion: {
+    /** One-time reward the first time any habitat reaches max size: minutes of income, with a floor. */
+    firstFullRewardMinutes: 15,
+    firstFullRewardFloor: 25_000,
+  },
+};
+
+const HOUR = 3600_000;
+
+export function newHabitat(now: number): HabitatSave {
+  return { sizeLevel: 1, lastFed: now, creatures: [], decorations: [], eggs: [] };
+}
+
+export function ownedCount(h: HabitatSave | undefined, speciesId: string) {
+  return h ? h.creatures.filter((c) => c.speciesId === speciesId).length : 0;
+}
+
+export function creatureCost(species: Species, owned: number) {
+  return Math.ceil((species.baseCost ?? 0) * Math.pow(COST_GROWTH, owned));
+}
+
+/** Space a habitat has at a size level (1–5). */
+export function spaceAt(biome: BiomeId, level: number) {
+  return BIOMES[biome].expansion.space[clampLevel(level) - 1];
+}
+
+/** A habitat's space: its size level, or more if an old save had more. */
+export function capacityOf(biome: BiomeId, h: Pick<HabitatSave, "sizeLevel" | "legacySpace">) {
+  return Math.max(spaceAt(biome, h.sizeLevel), h.legacySpace ?? 0);
+}
+
+/** Cost to expand to `toLevel` (2–5): baseCost × growth^(toLevel − 2). */
+export function expansionCost(biome: BiomeId, toLevel: number) {
+  const e = BIOMES[biome].expansion;
+  return Math.round(e.baseCost * Math.pow(e.costGrowth, toLevel - 2));
+}
+
+export interface ExpansionOffer {
+  from: number;
+  to: number;
+  cost: number;
+  spaceBefore: number;
+  spaceAfter: number;
+  newSlots: number;
+  feature: string;
+}
+
+/** What the next expansion would give, or null at max size. */
+export function nextExpansion(biome: BiomeId, h: HabitatSave | undefined): ExpansionOffer | null {
+  if (!h || h.sizeLevel >= SIZE_LEVELS) return null;
+  const to = h.sizeLevel + 1;
+  const featureId = BIOMES[biome].expansion.features[to - 2];
+  return {
+    from: h.sizeLevel,
+    to,
+    cost: expansionCost(biome, to),
+    spaceBefore: capacityOf(biome, h),
+    spaceAfter: Math.max(spaceAt(biome, to), h.legacySpace ?? 0),
+    newSlots: newSlotsAt(biome, to),
+    feature: TERRAIN_FEATURES[featureId]?.name ?? "",
+  };
+}
+
+export function spaceUsed(h: HabitatSave | undefined) {
+  if (!h) return 0;
+  let s = 0;
+  for (const c of h.creatures) {
+    const sp = SPECIES_BY_ID[c.speciesId];
+    if (sp) s += SIZE_SPACE[sp.size];
+  }
+  return s;
+}
+
+export function decoHappiness(h: HabitatSave) {
+  const seen = new Set<string>();
+  let bonus = 0;
+  for (const d of h.decorations) {
+    if (seen.has(d.decoId)) continue;
+    seen.add(d.decoId);
+    bonus += DECORATION_BY_ID[d.decoId]?.happiness ?? 0;
+  }
+  return Math.min(bonus, ECONOMY.happiness.decoMax);
+}
+
+export interface HappinessBreakdown {
+  value: number;
+  deco: number;
+  fed: number;
+  neglect: number;
+}
+
+export function happiness(h: HabitatSave, now: number): HappinessBreakdown {
+  const cfg = ECONOMY.happiness;
+  const hoursSinceFed = Math.max(0, (now - h.lastFed) / HOUR);
+  const deco = decoHappiness(h);
+  const fed = hoursSinceFed < cfg.fedBonusHours ? cfg.fedBonus : 0;
+  const neglect = Math.max(0, hoursSinceFed - cfg.neglectAfterHours) * cfg.neglectPerHour;
+  const value = Math.min(cfg.max, Math.max(cfg.min, cfg.base + deco + fed - neglect));
+  return { value, deco, fed, neglect };
+}
+
+export function habitatBaseIncome(h: HabitatSave | undefined) {
+  if (!h) return 0;
+  let sum = 0;
+  for (const c of h.creatures) sum += SPECIES_BY_ID[c.speciesId]?.pearlsPerSec ?? 0;
+  return sum;
+}
+
+export function habitatIncome(h: HabitatSave | undefined, now: number) {
+  if (!h) return 0;
+  return habitatBaseIncome(h) * happiness(h, now).value;
+}
+
+export function totalIncome(save: Pick<SaveData, "habitats">, now: number) {
+  let sum = 0;
+  for (const h of Object.values(save.habitats)) sum += habitatIncome(h, now);
+  return sum;
+}
+
+/** Clamp an away duration to [0, cap] so clock changes can't break anything. */
+export function clampAwaySeconds(from: number, to: number) {
+  const raw = (to - from) / 1000;
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.min(raw, ECONOMY.offlineCapHours * 3600);
+}
+
+export interface OfflineResult {
+  seconds: number;
+  total: number;
+  perBiome: Partial<Record<BiomeId, number>>;
+}
+
+/**
+ * Offline earnings: income/sec × secondsAway × offlineRate, capped.
+ * Happiness can drift while away, so each habitat is sampled at the midpoint.
+ */
+export function offlineEarnings(save: Pick<SaveData, "habitats">, from: number, to: number): OfflineResult {
+  const seconds = clampAwaySeconds(from, to);
+  const mid = from + (seconds * 1000) / 2;
+  const perBiome: Partial<Record<BiomeId, number>> = {};
+  let total = 0;
+  for (const [id, h] of Object.entries(save.habitats) as [BiomeId, HabitatSave][]) {
+    const earned = habitatIncome(h, mid) * seconds * ECONOMY.offlineRate;
+    if (earned > 0) {
+      perBiome[id] = earned;
+      total += earned;
+    }
+  }
+  return { seconds, total, perBiome };
+}
+
+/** Codex entries for a biome: every species plus every color variant. */
+export function codexEntries(biome: BiomeId) {
+  return speciesForBiome(biome).flatMap((s) => [s.id, ...(s.variants ?? []).map((v) => v.id)]);
+}
+
+export function codexProgress(biome: BiomeId, codex: SaveData["codex"]) {
+  const ids = codexEntries(biome);
+  const owned = ids.filter((id) => codex[id] === "owned").length;
+  const spotted = ids.filter((id) => codex[id] === "spotted").length;
+  return { owned, spotted, total: ids.length, pct: ids.length ? owned / ids.length : 0 };
+}
+
+export const CODEX_TIERS = [0.25, 0.5, 0.75, 1];
+
+/** Visitor pool for a biome with decoration-boosted weights. */
+export function visitorWeights(biome: BiomeId, h: HabitatSave | undefined, codex: SaveData["codex"]) {
+  const boosts: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const d of h?.decorations ?? []) {
+    if (seen.has(d.decoId)) continue;
+    seen.add(d.decoId);
+    for (const [sid, mult] of Object.entries(DECORATION_BY_ID[d.decoId]?.visitorBoost ?? {})) {
+      boosts[sid] = (boosts[sid] ?? 1) * mult;
+    }
+  }
+  return speciesForBiome(biome)
+    .filter((s) => s.obtain === "visitor" || s.visitorWeight !== undefined)
+    .map((s) => {
+      let w = (s.visitorWeight ?? VISITOR_RARITY_WEIGHT[s.rarity]) * (boosts[s.id] ?? 1);
+      if (codex[s.id] === "owned") w *= ECONOMY.visitor.ownedWeight;
+      return { species: s, weight: w };
+    })
+    .filter((x) => x.weight > 0);
+}
+
+export function pickWeighted<T extends { weight: number }>(items: T[], rand = Math.random): T | undefined {
+  const total = items.reduce((a, b) => a + b.weight, 0);
+  if (total <= 0) return undefined;
+  let r = rand() * total;
+  for (const it of items) {
+    r -= it.weight;
+    if (r <= 0) return it;
+  }
+  return items[items.length - 1];
+}
+
+/** Is this species currently purchasable in the shop? */
+export function inShop(s: Species, codex: SaveData["codex"]) {
+  if (s.baseCost === undefined) return false;
+  if (s.obtain === "shop") return true;
+  return s.obtain === "visitor" && codex[s.id] === "owned";
+}
+
+// ───────────── Eggs ─────────────
+
+/** Species in a habitat that can lay eggs (2+ of them, not giants). */
+export function breedingSpecies(h: HabitatSave | undefined) {
+  if (!h) return [];
+  const counts = new Map<string, number>();
+  for (const c of h.creatures) counts.set(c.speciesId, (counts.get(c.speciesId) ?? 0) + 1);
+  return [...counts.entries()]
+    .filter(([id, n]) => n >= 2 && SPECIES_BY_ID[id] && canBreed(SPECIES_BY_ID[id]))
+    .map(([id]) => SPECIES_BY_ID[id]);
+}
+
+/**
+ * Roll for new eggs over `hours` of real time. Works for a 0.25 s live tick and
+ * for an 8 h offline gap alike. Never exceeds the waiting cap.
+ */
+export function rollEggs(h: HabitatSave, hours: number, now: number, rand = Math.random): Egg[] {
+  const room = ECONOMY.eggs.maxWaiting - h.eggs.length;
+  if (room <= 0 || hours <= 0) return [];
+  const laid: Egg[] = [];
+  for (const sp of breedingSpecies(h)) {
+    const rate = ECONOMY.eggs.chancePerHour[sp.rarity];
+    // Expected eggs = rate × hours; whole part guaranteed, fraction by chance.
+    const expected = rate * hours;
+    let n = Math.floor(expected) + (rand() < expected % 1 ? 1 : 0);
+    while (n-- > 0 && laid.length < room) laid.push({ speciesId: sp.id, laidAt: now });
+  }
+  return laid;
+}
+
+/** Variant a hatchling turns out to be, if any. */
+export function rollVariant(speciesId: string, rand = Math.random): string | undefined {
+  const vs = SPECIES_BY_ID[speciesId]?.variants;
+  if (!vs?.length || rand() >= ECONOMY.eggs.variantChance) return undefined;
+  return vs[Math.floor(rand() * vs.length)].id;
+}
+
+// ───────────── Daily goals ─────────────
+
+export function goalContext(save: Pick<SaveData, "habitats" | "biomesUnlocked"> & { pearls?: number }): GoalContext {
+  return {
+    habitats: save.biomesUnlocked.length,
+    canBreed: Object.values(save.habitats).some((h) => breedingSpecies(h).length > 0),
+    // Only offer "Expand a habitat" when one is affordable right now.
+    canExpand: save.biomesUnlocked.some((b) => {
+      const next = nextExpansion(b, save.habitats[b]);
+      return !!next && (save.pearls ?? 0) >= next.cost;
+    }),
+  };
+}
+
+/** Pick today's goals. Rewards are a few minutes of current income (with a floor). */
+export function makeDailyGoals(save: Pick<SaveData, "habitats" | "biomesUnlocked"> & { pearls?: number }, income: number, rand = Math.random): DailyGoal[] {
+  const ctx = goalContext(save);
+  const pool = GOALS.filter((g) => !g.requires || g.requires(ctx));
+  const picked: DailyGoal[] = [];
+  while (picked.length < GOALS_PER_DAY && pool.length) {
+    const g = pool.splice(Math.floor(rand() * pool.length), 1)[0];
+    const reward = Math.max(GOAL_REWARD_FLOOR, Math.round((income * g.rewardMinutes * 60) / 10) * 10);
+    picked.push({ id: g.id, progress: 0, target: g.target, done: false, claimed: false, reward, ...(g.distinct ? { keys: [] } : {}) });
+  }
+  return picked;
+}
