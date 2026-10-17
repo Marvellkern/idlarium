@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { SPECIES_BY_ID } from "../../data/creatures";
 import { SwimMode } from "../swimShader";
-import { cone, cyl, fin, glow, hashStr, ico, jitter, lathe, merge, mix, paint, sphere, tf, tube, type V3 } from "./geo";
+import { cone, cyl, fin, flipWinding, glow, hashStr, ico, jitter, lathe, merge, mix, paint, sphere, tf, tube, type V3 } from "./geo";
 
 export interface ModelDef {
   geometry: THREE.BufferGeometry;
@@ -931,7 +931,10 @@ function gulperEel(c: string[]): Built {
   jaw.scale(0.16, 0.16, 0.26);
   jaw.rotateX(-Math.PI / 2);
   jaw.translate(0, 0, 0.38);
+  // A dark lining inside the pouch, so the open mouth doesn't show through.
+  const lining = flipWinding(jaw.clone().translate(0, 0, -0.38).scale(0.95, 0.95, 0.95).translate(0, 0, 0.38));
   parts.push(paint(jaw, (p) => (p.y < -0.02 ? c[1] : c[0])));
+  parts.push(paint(lining, "#2a1020"));
   for (const s of [-1, 1]) parts.push(paint(tf(ico(0.008, 0), { p: [s * 0.03, 0.04, 0.47] }), EYE));
   return { geometry: merge(parts), swim: { amp: 0.14, freq: 9, mode: SwimMode.FISH } };
 }
@@ -965,7 +968,7 @@ function dumboOctopus(c: string[]): Built {
     parts.push(paint(tf(ico(0.03, 0), { p: [s * 0.1, 0.1, 0.12] }), EYE));
   }
   // Short webbed arms forming a skirt.
-  const skirt = new THREE.ConeGeometry(0.22, 0.22, 8, 1, true);
+  const skirt = new THREE.ConeGeometry(0.22, 0.22, 8, 1);
   skirt.translate(0, -0.08, 0);
   parts.push(paint(skirt, c[1]));
   for (let i = 0; i < 8; i++) {
@@ -982,7 +985,7 @@ function vampireSquid(c: string[]): Built {
     parts.push(glow(paint(tf(ico(0.03, 0), { p: [s * 0.1, 0.1, 0.1] }), "#4ab0ff"), 0.6));
   }
   // Webbed "cloak" between the arms, with glowing tips.
-  const cloak = new THREE.ConeGeometry(0.3, 0.32, 8, 2, true);
+  const cloak = new THREE.ConeGeometry(0.3, 0.32, 8, 2);
   cloak.translate(0, -0.12, 0);
   parts.push(paint(cloak, (_p, f) => (speckle(f, 30) ? c[1] : c[0])));
   for (let i = 0; i < 8; i++) {
@@ -1416,6 +1419,8 @@ function mataMata(c: string[]): Built {
   // A flat, knobbly shell with three ridges, like a pile of bark and leaves.
   const dome = jitter(tf(new THREE.SphereGeometry(0.5, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2), { s: [0.6, 0.18, 0.72] }), 0.03, 81);
   parts.push(paint(dome, (_p, f) => (speckle(f, 30) ? dark : speckle(f, 20, 3) ? mix(shell, skin, 0.5) : shell)));
+  // Underside of the shell.
+  parts.push(paint(tf(cyl(0.5, 0.5, 0.03, 9), { s: [0.6, 1, 0.72], p: [0, -0.01, 0] }), mix(shell, skin, 0.4)));
   for (const x of [-0.12, 0, 0.12]) parts.push(paint(tf(sphere(0.5, 5, 3), { s: [0.05, 0.05, 0.5], p: [x, 0.08, -0.02] }), dark));
   // Long neck and a flat, triangular head with a fringed edge.
   parts.push(paint(tube([[0, 0.0, 0.3], [0, 0.0, 0.42], [0, 0.0, 0.52]], 0.065, 6), skin));

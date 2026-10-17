@@ -90,6 +90,8 @@ export function glow(g: THREE.BufferGeometry, strength: number | ((centroid: THR
 
 /** Merge painted parts into one geometry with flat normals. */
 export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  // Test hook: the model hole check inspects each part before merging.
+  (globalThis as { __mergeHook?: (p: THREE.BufferGeometry[]) => void }).__mergeHook?.(parts);
   const g = mergeGeometries(parts, false);
   parts.forEach((p) => p.dispose());
   if (!g) throw new Error("mergeGeometries failed");
@@ -122,10 +124,11 @@ export function jitter(g: THREE.BufferGeometry, amount: number, seed = 1) {
 
 /** Lathe around the z axis. profile = [radius, z] from tail (−z) to nose (+z). */
 export function lathe(profile: [number, number][], radial = 7) {
-  const g = new THREE.LatheGeometry(
-    profile.map(([r, z]) => new THREE.Vector2(Math.max(r, 0.0005), z)),
-    radial,
-  );
+  // Close both ends: a profile that stops at a non-zero radius would leave an open hole.
+  const pts = profile.map(([r, z]) => new THREE.Vector2(Math.max(r, 0.0005), z));
+  if (pts[0].x > 0.001) pts.unshift(new THREE.Vector2(0.0005, pts[0].y));
+  if (pts[pts.length - 1].x > 0.001) pts.push(new THREE.Vector2(0.0005, pts[pts.length - 1].y));
+  const g = new THREE.LatheGeometry(pts, radial);
   // Lathe builds around y; rotating +90° about x maps y → z.
   g.rotateX(Math.PI / 2);
   return g;
@@ -194,7 +197,37 @@ export function tube(points: V3[], radius: number | ((t: number) => number), rad
       }
     }
   }
-  return g;
+  // Cap both ends so thick tubes (logs, roots, arms) aren't hollow: a fan from the
+  // curve's end point to the end ring's own vertices, facing outward.
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const ring = radial + 1;
+  const capPts: number[] = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (const t of [0, 1]) {
+    const c = curve.getPointAt(t);
+    const out = curve.getTangentAt(t).multiplyScalar(t === 0 ? -1 : 1);
+    const base = (t === 0 ? 0 : segs) * ring;
+    for (let j = 0; j < radial; j++) {
+      a.fromBufferAttribute(pos, base + j);
+      b.fromBufferAttribute(pos, base + j + 1);
+      if (a.distanceTo(c) < 0.002) continue;
+      n.subVectors(a, c).cross(_v.subVectors(b, c));
+      if (n.dot(out) >= 0) capPts.push(c.x, c.y, c.z, a.x, a.y, a.z, b.x, b.y, b.z);
+      else capPts.push(c.x, c.y, c.z, b.x, b.y, b.z, a.x, a.y, a.z);
+    }
+  }
+  if (!capPts.length) return g;
+  const caps = new THREE.BufferGeometry();
+  caps.setAttribute("position", new THREE.Float32BufferAttribute(capPts, 3));
+  const body = g.toNonIndexed();
+  for (const k of Object.keys(body.attributes)) if (k !== "position") body.deleteAttribute(k);
+  const merged = mergeGeometries([body, caps], false)!;
+  g.dispose();
+  body.dispose();
+  caps.dispose();
+  return merged;
 }
 
 export function mix(a: THREE.ColorRepresentation, b: THREE.ColorRepresentation, t: number) {

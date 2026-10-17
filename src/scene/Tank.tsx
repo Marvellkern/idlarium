@@ -153,7 +153,7 @@ function lampIsOn(style: { lampOn: boolean; lampAuto: boolean }) {
 
 function Lamp({ biome, lamp, dims, high, forceOn }: { biome: BiomeId; lamp: LampDef; dims: Dims; high: boolean; forceOn: boolean }) {
   const model = useMemo(() => lampModel(lamp.look, "#ffffff"), [lamp.look]);
-  const bodyMat = useMemo(() => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.5, metalness: lamp.look === "brass" ? 0.4 : 0.1 }), [lamp.look]);
+  const bodyMat = useMemo(() => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.5, metalness: lamp.look === "brass" ? 0.4 : 0.1, side: THREE.DoubleSide }), [lamp.look]);
   const lensMat = useMemo(() => new THREE.MeshBasicMaterial({ color: lamp.color, toneMapped: false }), [lamp.color]);
   const beamMat = useMemo(
     () =>
